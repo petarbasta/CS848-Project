@@ -1,3 +1,5 @@
+import itertools
+
 # Considerations:
 # 1. To apply MP to PyTorch models, the model layers must be modified to be assigned to devices),
 #    or the model must be otherwise reimplemented. For DP, we can use the PyTorch model as-is.
@@ -14,6 +16,8 @@ class HyperparameterSpace:
 
     def __init__(self, hyperparameter_space_dict) -> None:
         self._space_dict = hyperparameter_space_dict
+        self.list_permutations = list(itertools.product(*self._space_dict.values()))
+        self.current = 0
 
     def __iter__(self):
         return self
@@ -25,7 +29,11 @@ class HyperparameterSpace:
         # next_val = HyperparameterConfig({ "param1": self._space_dict["param1"][i], ... })
         # return next_val
         # See https://stackoverflow.com/questions/19151/build-a-basic-python-iterator
-        pass
+        if self.current < len(self.list_permutations):
+            next_config = HyperparameterConfig(dict(zip(self._space_dict.keys(),self.list_permutations[self.current])))
+            self.current += 1
+            return next_config
+        raise StopIteration
 
     def get_dict(self):
         return self._space_dict
