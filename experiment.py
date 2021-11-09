@@ -23,12 +23,6 @@ class HyperparameterSpace:
         return self
 
     def __next__(self):
-        # TODO: Iterate through self._space_dict and emit each possible HyperparameterConfig
-        # Each will look like: { "param1": 372, "param2": 112, "param3": "some_value" }
-        # ie.
-        # next_val = HyperparameterConfig({ "param1": self._space_dict["param1"][i], ... })
-        # return next_val
-        # See https://stackoverflow.com/questions/19151/build-a-basic-python-iterator
         if self.current < len(self.list_permutations):
             next_config = HyperparameterConfig(dict(zip(self._space_dict.keys(),self.list_permutations[self.current])))
             self.current += 1
