@@ -1,29 +1,37 @@
 import argparse
+import json
+import sys
 from experiment import Experiment, ExperimentConfig
+from hyperparameters import HyperparameterSpace
 
 """
 python controller.py \
-        --venv_dir /u4/jerorset/cs848/CS848-Project/venv \
-        --train_file /u4/jerorset/cs848/CS848-Project/controller/fake_dnn.py  \
-        --remote_username jerorset \
-        --remote_machines gpu1 gpu2 gpu3
+        --venv /u4/jerorset/cs848/CS848-Project/venv \
+        --dnn /u4/jerorset/cs848/CS848-Project/controller/fake_dnn.py  \
+        --dnn_hyperparameter_space /u4/jerorset/cs848/CS848-Project/controller/fake_dnn_hyperparameter_space.json \
+        --username jerorset \
+        --machines gpu1 gpu2 gpu3
 """
 
 def init_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--remote_username', required=True, type=str, help='Username for SSH to remote machines')
-    parser.add_argument('--remote_machines', required=True, nargs='+', help='All remote machines to utilize')
-    parser.add_argument('--venv_dir', required=True, type=str, help='The venv directory')
-    parser.add_argument('--train_file', required=True, type=str, help='The Python file containing the PyTorch training job')
+    parser.add_argument('--username', required=True, type=str, help='Username for SSH to remote machines')
+    parser.add_argument('--machines', required=True, nargs='+', help='All remote machines to utilize')
+    parser.add_argument('--venv', required=True, type=str, help='The venv directory')
+    parser.add_argument('--dnn', required=True, type=str, help='The Python file containing the PyTorch DNN training job')
+    parser.add_argument('--dnn_hyperparameter_space', required=True, type=str, help='The JSON file defining the DNN hyperparameter space')
 
     args = parser.parse_args()
     return args
 
+def init_hyperparameter_space(path):
+    with open(path) as f:
+        hyp_dict = json.load(f)
+        return HyperparameterSpace(hyp_dict)
+
 def main():
     args = init_args()
-
-    # TODO: Allow hyperparameter space definition from config file
-    hyperparameter_space = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7', 'H8', 'H9', 'H10']
+    hyperparameter_space = init_hyperparameter_space(args.dnn_hyperparameter_space)
 
     experiment_config = ExperimentConfig(args)
     experiment = Experiment(experiment_config, hyperparameter_space)

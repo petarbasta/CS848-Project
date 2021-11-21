@@ -14,16 +14,18 @@ class Trial:
         self.hyperparameter_config = hyperparameter_config
 
         venv_cmd = f"source {os.path.join(trial_config.venv_dir, 'bin/activate')}"
-        # TODO: Convert hyperparameter config to proper dict-based class instead of hardcoded fake arg
-        train_cmd = f"python {trial_config.train_file} --dnn_arg \"{hyperparameter_config}\""
+        train_args = ' '.join(f"--{name} \"{value}\"" for name, value in hyperparameter_config.get_dict().items())
+        train_cmd = f"python {trial_config.train_file} {train_args}"
         ssh_cmd = f"ssh {trial_config.username}@{trial_config.machine} -o StrictHostKeyChecking=no"
         self.full_cmd = f"{ssh_cmd} \"{venv_cmd} && {train_cmd}\""
 
     def run(self):
-        print(f"[TRIAL.PY {self.machine} {self.hyperparameter_config}] Logging into {self.machine} and beginning training...")
-        print(f"[TRIAL.PY {self.machine} {self.hyperparameter_config}] {self.full_cmd}")
+        print(f"[TRIAL.PY {self.machine} {self.hyperparameter_config.get_dict()}] Logging into {self.machine} and beginning training...")
+        print(f"[TRIAL.PY {self.machine} {self.hyperparameter_config.get_dict()}] {self.full_cmd}")
         result = subprocess.run(self.full_cmd, shell=True, universal_newlines=True, stdout=subprocess.PIPE)
         output = '\n'.join(result.stdout.splitlines())
-        print(f"[TRIAL.PY {self.machine} {self.hyperparameter_config}] Recieved training output: {output}")
+        print(f"[TRIAL.PY {self.machine} {self.hyperparameter_config.get_dict()}] Recieved training output: {output}")
+
+        # TODO: Parse and return results (which should be encoded in standardized format, perhaps JSON)
         return output
 

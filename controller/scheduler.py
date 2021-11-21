@@ -12,10 +12,10 @@ class ParallelRoundRobinScheduler:
         with lock:
             print(f"[SCHEDULER.PY] Starting producer with PID {os.getpid()}")
 
-        for hyp_config in self.hyperparameter_space:
-            queue.put(hyp_config)
+        for hyperparameter_config in self.hyperparameter_space:
+            queue.put(hyperparameter_config)
 
-        # Since there is only 1 producer, wait until queue is empty before returning
+        # Since there is only 1 producer, wait until all spaces have been processed before returning
         while len(results) != len(self.hyperparameter_space):
             time.sleep(1)
 
@@ -26,7 +26,6 @@ class ParallelRoundRobinScheduler:
         with lock:
             print(f"[SCHEDULER.PY] Assigning machine {machine} to PID {os.getpid()}")
 
-        # Run indefinitely
         while True:
             # Block until the queue has a hyperparameter config to retrieve
             hyperparameter_config = queue.get()
@@ -36,7 +35,7 @@ class ParallelRoundRobinScheduler:
             trial = Trial(trial_config, hyperparameter_config)
 
             with lock:
-                print(f"[SCHEDULER.PY] {machine} is now training hyperparameter config {hyperparameter_config}...")
+                print(f"[SCHEDULER.PY] {machine} is now training hyperparameter config {hyperparameter_config.get_dict()}...")
 
             trial.run()
 
@@ -44,7 +43,7 @@ class ParallelRoundRobinScheduler:
             results.append(hyperparameter_config)
 
             with lock:
-                print(f"[SCHEDULER.PY] {machine} has finished training hyperparameter config {hyperparameter_config}")
+                print(f"[SCHEDULER.PY] {machine} has finished training hyperparameter config {hyperparameter_config.get_dict()}")
 
     def run(self):
         queue = Queue()
