@@ -1,17 +1,28 @@
 import os
 import subprocess
+import json
 
 class TrialConfig:
-    def __init__(self, machine, username, venv_dir, train_file) -> None:
+    def __init__(self, machine, username, venv_dir, train_file, dnn_metric_key) -> None:
         self.machine = machine
         self.username = username
         self.venv_dir = venv_dir
         self.train_file = train_file
+        self.dnn_metric_key = dnn_metric_key
+
+class TrialResult:
+    def __init__(self, hyperparameter_config, value) -> None:
+        self.hyperparameter_config = hyperparameter_config
+        self.value = value
+
+    def __str__(self):
+        return f"{self.hyperparameter_config.get_dict()}: {self.value}"
 
 class Trial:
     def __init__(self, trial_config, hyperparameter_config) -> None:
         self.machine = trial_config.machine
         self.hyperparameter_config = hyperparameter_config
+        self.trial_config = trial_config
 
         venv_cmd = f"source {os.path.join(trial_config.venv_dir, 'bin/activate')}"
         train_args = ' '.join(f"--{name} \"{value}\"" for name, value in hyperparameter_config.get_dict().items())
@@ -26,6 +37,5 @@ class Trial:
         output = '\n'.join(result.stdout.splitlines())
         print(f"[TRIAL.PY {self.machine} {self.hyperparameter_config.get_dict()}] Recieved training output: {output}")
 
-        # TODO: Parse and return results (which should be encoded in standardized format, perhaps JSON)
-        return output
+        return TrialResult(self.hyperparameter_config, float(json.loads(output)[self.trial_config.dnn_metric_key]))
 

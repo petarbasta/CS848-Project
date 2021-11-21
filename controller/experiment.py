@@ -6,11 +6,13 @@ class ExperimentConfig:
         self.remote_machines = controller_args.machines
         self.venv_dir = controller_args.venv
         self.train_file = controller_args.dnn
+        self.dnn_metric_key = controller_args.dnn_metric_key
 
 class Experiment:
     def __init__(self, experiment_config, hyperparameter_space) -> None:
         self.scheduler = ParallelRoundRobinScheduler(experiment_config, hyperparameter_space)
 
     def run(self):
-        return self.scheduler.run()
+        trial_results = self.scheduler.run()
+        return trial_results
 

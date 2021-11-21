@@ -1,5 +1,6 @@
 import argparse
 import random
+import json
 
 """
 python fake_dnn.py --fake_arg_1 "Some Value" --fake_arg_2 "Another Value"
@@ -16,8 +17,11 @@ def init_args():
 
 def main():
     args = init_args()
-    fake_score = round(random.uniform(0,1), 3)
-    print(f"[FAKE_DNN.PY {args.fake_arg_1} {args.fake_arg_2}] Accuracy is {fake_score}")
+    fake_accuracy = round(random.uniform(0,1), 3)
+
+    output = {'accuracy': fake_accuracy}
+    print(json.dumps(output))
+    #print(f"[FAKE_DNN.PY {args.fake_arg_1} {args.fake_arg_2}] Accuracy is {fake_score}")
 
 
 if __name__ == '__main__':

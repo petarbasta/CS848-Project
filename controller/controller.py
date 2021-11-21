@@ -3,12 +3,15 @@ import json
 import sys
 from experiment import Experiment, ExperimentConfig
 from hyperparameters import HyperparameterSpace
+from evaluator import Evaluator
 
 """
 python controller.py \
         --venv /u4/jerorset/cs848/CS848-Project/venv \
         --dnn /u4/jerorset/cs848/CS848-Project/controller/fake_dnn.py  \
         --dnn_hyperparameter_space /u4/jerorset/cs848/CS848-Project/controller/fake_dnn_hyperparameter_space.json \
+        --dnn_metric_key accuracy \
+        --dnn_metric_objective max \
         --username jerorset \
         --machines gpu1 gpu2 gpu3
 """
@@ -20,6 +23,8 @@ def init_args():
     parser.add_argument('--venv', required=True, type=str, help='The venv directory')
     parser.add_argument('--dnn', required=True, type=str, help='The Python file containing the PyTorch DNN training job')
     parser.add_argument('--dnn_hyperparameter_space', required=True, type=str, help='The JSON file defining the DNN hyperparameter space')
+    parser.add_argument('--dnn_metric_key', required=True, type=str, help='The key for the relevant metric to extract from DNN JSON output')
+    parser.add_argument('--dnn_metric_objective', required=True, choices=['max', 'min'], help='Whether to maximize or minimize the metric')
 
     args = parser.parse_args()
     return args
@@ -35,10 +40,16 @@ def main():
 
     experiment_config = ExperimentConfig(args)
     experiment = Experiment(experiment_config, hyperparameter_space)
-    results = experiment.run()
+    
+    all_trial_results = experiment.run()
+    all_printout = "\n".join(str(r) for r in all_trial_results)
+    print(f"[CONTROLLER.PY] All Trial Results:")
+    print(all_printout)
 
-    # TODO: Do something with the results
-    print(f"[CONTROLLER.PY] Results: {results}")
+    evaluator = Evaluator(args.dnn_metric_objective == 'min')
+    best_trial_result = evaluator.get_best(all_trial_results) 
+    print(f"[CONTROLLER.PY] Best Trial Result:")
+    print(str(best_trial_result))
 
 
 if __name__ == '__main__':

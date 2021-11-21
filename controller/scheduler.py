@@ -31,16 +31,17 @@ class ParallelRoundRobinScheduler:
             hyperparameter_config = queue.get()
             
             trial_config = TrialConfig(machine, self.experiment_config.remote_username,
-                    self.experiment_config.venv_dir, self.experiment_config.train_file)
+                    self.experiment_config.venv_dir, self.experiment_config.train_file,
+                    self.experiment_config.dnn_metric_key)
             trial = Trial(trial_config, hyperparameter_config)
 
             with lock:
                 print(f"[SCHEDULER.PY] {machine} is now training hyperparameter config {hyperparameter_config.get_dict()}...")
 
-            trial.run()
+            trial_result = trial.run()
 
             # Add output to shared results list
-            results.append(hyperparameter_config)
+            results.append(trial_result)
 
             with lock:
                 print(f"[SCHEDULER.PY] {machine} has finished training hyperparameter config {hyperparameter_config.get_dict()}")
