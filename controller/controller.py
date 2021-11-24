@@ -8,8 +8,8 @@ from evaluator import Evaluator
 """
 python controller.py \
         --venv /u4/jerorset/cs848/CS848-Project/venv \
-        --dnn /u4/jerorset/cs848/CS848-Project/controller/fake_dnn.py  \
-        --dnn_hyperparameter_space /u4/jerorset/cs848/CS848-Project/controller/fake_dnn_hyperparameter_space.json \
+        --dnn /u4/jerorset/cs848/CS848-Project/models/Fake/train.py  \
+        --dnn_hyperparameter_space /u4/jerorset/cs848/CS848-Project/models/Fake/hyperparameter_space.json \
         --dnn_metric_key accuracy \
         --dnn_metric_objective max \
         --username jerorset \
