@@ -3,5 +3,6 @@ numpy==1.19.5
 Pillow==8.4.0
 pkg_resources==0.0.0
 torch==1.10.0
+torchgpipe==0.0.7
 torchvision==0.11.1
 typing_extensions==4.0.0

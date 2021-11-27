@@ -31,8 +31,15 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
+from torchgpipe import GPipe
+from torchgpipe.balance import balance_by_time, balance_by_size
 from torchvision.models.resnet import ResNet
-from parallel_models import DataParallelResNet50, ModelParallelResNet50
+#from parallel_models import DataParallelResNet50, ModelParallelResNet50
+from parallel_models import (
+    build_dp_resnet,
+    build_mp_resnet,
+    build_gpipe_resnet        
+)
 
 assert torch.cuda.is_available(), "CUDA must be available in order to run"
 n_gpus = torch.cuda.device_count()
@@ -41,11 +48,13 @@ assert n_gpus == 2, f"ImageNet training requires exactly 2 GPUs to run, but got 
 best_acc1 = 0
 device = torch.device('cuda:0')
 supported_model_architectures = ['resnet']
-supported_parallelism_strategies = ['dp', 'mp'] # hp currently not working, may not be possible
+# hp currently not working, may not be possible
+supported_parallelism_strategies = ['dp', 'mp', 'gpipe']
 supported_models = {
     'resnet': {
-        'dp': DataParallelResNet50,
-        'mp': ModelParallelResNet50,
+        'dp': build_dp_resnet,
+        'mp': build_mp_resnet,
+        'gpipe': build_gpipe_resnet,
         #'hp': ModelParallelResNet50
     }
 }
@@ -112,7 +121,7 @@ def init_args():
     # Manually override expected arguments to setup single-node multi-GPU distributed training
     # This should only occur when Data Parallelism (mp) or Hybrid Parallelism (hp) is specified
     args = parser.parse_args()
-    train_distributed = args.parallelism != 'mp'
+    train_distributed = args.parallelism == 'dp'
 
     args.pretrained = None
     args.gpu = None
@@ -178,7 +187,15 @@ def main_worker(gpu, ngpus_per_node, args):
     # create model
     model = supported_models[args.arch][args.parallelism]()
 
-    if args.parallelism == 'hp':
+    if args.parallelism == 'gpipe':
+        # Input has shape: torch.Size([256, 3, 224, 224])
+        #partitions = torch.cuda.device_count()
+        #sample = torch.rand(128, 3, 224, 224)
+        #balance = balance_by_time(partitions, model, sample)
+        #print(f"Balance: {balance}") # [57, 126]
+        #model = GPipe(model, balance, chunks=8)
+        model = GPipe(model, balance=[57, 126], chunks=8)
+    elif args.parallelism == 'hp':
         torch.cuda.set_device(args.gpu)
         args.batch_size = int(args.batch_size / ngpus_per_node)
         args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
@@ -204,7 +221,10 @@ def main_worker(gpu, ngpus_per_node, args):
             model = torch.nn.parallel.DistributedDataParallel(model)
 
     # define loss function (criterion) and optimizer
-    criterion = nn.CrossEntropyLoss().cuda(args.gpu)
+    if args.parallelism == 'gpipe':
+        criterion = nn.CrossEntropyLoss()
+    else:
+        criterion = nn.CrossEntropyLoss().cuda(args.gpu)
 
     optimizer = torch.optim.SGD(model.parameters(), args.lr,
                                 momentum=args.momentum,
@@ -320,7 +340,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         if args.parallelism == 'dp':
             images = images.cuda(args.gpu, non_blocking=True)
             target = target.cuda(args.gpu, non_blocking=True)
-        else: # mp
+        elif args.parallelism == 'mp':
             images = images.cuda(1, non_blocking=True)
             target = target.cuda(1, non_blocking=True)
 
@@ -367,7 +387,7 @@ def validate(val_loader, model, criterion, args):
             if args.parallelism == 'dp':
                 images = images.cuda(args.gpu, non_blocking=True)
                 target = target.cuda(args.gpu, non_blocking=True)
-            else: # mp
+            elif args.parallelism == 'mp':
                 images = images.cuda(1, non_blocking=True)
                 target = target.cuda(1, non_blocking=True)
 
