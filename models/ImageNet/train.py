@@ -5,16 +5,10 @@ This is a modified version of the ImageNet training example script from the PyTo
 Original script: https://github.com/pytorch/examples/tree/master/imagenet
 Retrieval date: Nov 26, 2021
 
-To train a model, run main.py with the desired model architecture and the path to the ImageNet dataset:
+python main.py -a resnet --parallelism dp /u4/jerorseth/datasets/ILSVRC/Data/CLS-LOC
 
-    python main.py -a resnet18 [imagenet-folder with train and val folders]
-
-The default learning rate schedule starts at 0.1 and decays by a factor of 10 every 30 epochs.
-This is appropriate for ResNet and models with batch normalization, but too high for AlexNet and VGG.
-Use 0.01 as the initial learning rate for AlexNet or VGG:
-
-    python main.py -a alexnet --lr 0.01 [imagenet-folder with train and val folders]
-
+Note 1: Data Parallelism (and Hybrid) only supports single node / multiple GPU training.
+Note 2: You can specify hyperparameters using other available arguments.
 """
 
 import argparse
@@ -36,69 +30,102 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-import torchvision.models as models
 
-model_names = sorted(name for name in models.__dict__
-    if name.islower() and not name.startswith("__")
-    and callable(models.__dict__[name]))
+from torchvision.models.resnet import ResNet
+from models.imagenet.resnet import ModelParallelResNet50
 
-parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-parser.add_argument('data', metavar='DIR',
-                    help='path to dataset')
-parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
-                    choices=model_names,
-                    help='model architecture: ' +
-                        ' | '.join(model_names) +
-                        ' (default: resnet18)')
-parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
-                    help='number of data loading workers (default: 4)')
-parser.add_argument('--epochs', default=90, type=int, metavar='N',
-                    help='number of total epochs to run')
-parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
-                    help='manual epoch number (useful on restarts)')
-parser.add_argument('-b', '--batch-size', default=256, type=int,
-                    metavar='N',
-                    help='mini-batch size (default: 256), this is the total '
-                         'batch size of all GPUs on the current node when '
-                         'using Data Parallel or Distributed Data Parallel')
-parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
-                    metavar='LR', help='initial learning rate', dest='lr')
-parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
-                    help='momentum')
-parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
-                    metavar='W', help='weight decay (default: 1e-4)',
-                    dest='weight_decay')
-parser.add_argument('-p', '--print-freq', default=10, type=int,
-                    metavar='N', help='print frequency (default: 10)')
-parser.add_argument('--resume', default='', type=str, metavar='PATH',
-                    help='path to latest checkpoint (default: none)')
-parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
-                    help='evaluate model on validation set')
-parser.add_argument('--pretrained', dest='pretrained', action='store_true',
-                    help='use pre-trained model')
-parser.add_argument('--world-size', default=-1, type=int,
-                    help='number of nodes for distributed training')
-parser.add_argument('--rank', default=-1, type=int,
-                    help='node rank for distributed training')
-parser.add_argument('--dist-url', default='tcp://224.66.41.62:23456', type=str,
-                    help='url used to set up distributed training')
-parser.add_argument('--dist-backend', default='nccl', type=str,
-                    help='distributed backend')
-parser.add_argument('--seed', default=None, type=int,
-                    help='seed for initializing training. ')
-parser.add_argument('--gpu', default=None, type=int,
-                    help='GPU id to use.')
-parser.add_argument('--multiprocessing-distributed', action='store_true',
-                    help='Use multi-processing distributed training to launch '
-                         'N processes per node, which has N GPUs. This is the '
-                         'fastest way to use PyTorch for either single node or '
-                         'multi node data parallel training')
+assert torch.cuda.is_available(), "CUDA must be available in order to run"
+n_gpus = torch.cuda.device_count()
+assert n_gpus == 2, f"ImageNet training requires exactly 2 GPUs to run, but got {n_gpus}"
 
 best_acc1 = 0
+device = torch.device('cuda:0')
+supported_model_architectures = ['resnet']
+supported_parallelism_strategies = ['dp', 'mp', 'hp']
+supported_models = {
+    'resnet': {
+        'dp': ResNet,
+        'mp': ModelParallelResNet50,
+        'hp': ModelParallelResNet50
+    }
+}
+
+
+def init_args():
+    parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
+    parser.add_argument('data', metavar='DIR',
+                        help='path to dataset')
+    parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet',
+                        choices=supported_model_architectures,
+                        help='model architecture: ' +
+                            ' | '.join(supported_model_architectures) +
+                            ' (default: resnet)')
+    parser.add_argument('--parallelism', default='dp',
+                        choices=supported_parallelism_strategies,
+                        help='training parallelism strategy: ' +
+                            ' | '.join(supported_parallelism_strategies) +
+                            ' (default: dp)')
+    parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
+                        help='number of data loading workers (default: 4)')
+    parser.add_argument('--epochs', default=90, type=int, metavar='N',
+                        help='number of total epochs to run')
+    parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
+                        help='manual epoch number (useful on restarts)')
+    parser.add_argument('-b', '--batch-size', default=256, type=int,
+                        metavar='N',
+                        help='mini-batch size (default: 256), this is the total '
+                            'batch size of all GPUs on the current node when '
+                            'using Data Parallel or Distributed Data Parallel')
+    parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
+                        metavar='LR', help='initial learning rate', dest='lr')
+    parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
+                        help='momentum')
+    parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
+                        metavar='W', help='weight decay (default: 1e-4)',
+                        dest='weight_decay')
+    parser.add_argument('-p', '--print-freq', default=10, type=int,
+                        metavar='N', help='print frequency (default: 10)')
+    parser.add_argument('--resume', default='', type=str, metavar='PATH',
+                        help='path to latest checkpoint (default: none)')
+    parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
+                        help='evaluate model on validation set')
+    # parser.add_argument('--pretrained', dest='pretrained', action='store_true',
+    #                     help='use pre-trained model')
+    # parser.add_argument('--world-size', default=-1, type=int,
+    #                     help='number of nodes for distributed training')
+    # parser.add_argument('--rank', default=-1, type=int,
+    #                     help='node rank for distributed training')
+    # parser.add_argument('--dist-url', default='tcp://224.66.41.62:23456', type=str,
+    #                     help='url used to set up distributed training')
+    # parser.add_argument('--dist-backend', default='nccl', type=str,
+    #                     help='distributed backend')
+    parser.add_argument('--seed', default=None, type=int,
+                        help='seed for initializing training. ')
+    # parser.add_argument('--gpu', default=None, type=int,
+    #                     help='GPU id to use.')
+    # parser.add_argument('--multiprocessing-distributed', action='store_true',
+    #                     help='Use multi-processing distributed training to launch '
+    #                         'N processes per node, which has N GPUs. This is the '
+    #                         'fastest way to use PyTorch for either single node or '
+    #                         'multi node data parallel training')
+    
+    # Manually override expected arguments to setup single-node multi-GPU distributed training
+    # This should only occur when Data Parallelism (mp) or Hybrid Parallelism (hp) is specified
+    args = parser.parse_args()
+    train_distributed = args.parallelism != 'mp'
+
+    args.pretrained = None
+    args.gpu = None
+    args.world_size = 1 if train_distributed else -1
+    args.rank = 0 if train_distributed else -1
+    args.dist_url = 'tcp://127.0.0.1:8001' if train_distributed else 'tcp://224.66.41.62:23456'
+    args.dist_backend = 'nccl'
+    args.multiprocessing_distributed = True if train_distributed else None
+    return args
 
 
 def main():
-    args = parser.parse_args()
+    args = init_args()
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -149,16 +176,9 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
     # create model
-    if args.pretrained:
-        print("=> using pre-trained model '{}'".format(args.arch))
-        model = models.__dict__[args.arch](pretrained=True)
-    else:
-        print("=> creating model '{}'".format(args.arch))
-        model = models.__dict__[args.arch]()
+    model = supported_models[args.arch][args.parallelism]()
 
-    if not torch.cuda.is_available():
-        print('using CPU, this will be slow')
-    elif args.distributed:
+    if args.distributed:
         # For multiprocessing distributed, DistributedDataParallel constructor
         # should always set the single device scope, otherwise,
         # DistributedDataParallel will use all available devices.
@@ -170,6 +190,9 @@ def main_worker(gpu, ngpus_per_node, args):
             # ourselves based on the total number of GPUs we have
             args.batch_size = int(args.batch_size / ngpus_per_node)
             args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
+
+            # TODO: This line should not execute, since args.gpu is None, but...
+            # If hp (ie. mp + dp) is specified, then device_ids and output_device must NOT be set!
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
         else:
             model.cuda()
@@ -303,8 +326,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
 
         if args.gpu is not None:
             images = images.cuda(args.gpu, non_blocking=True)
-        if torch.cuda.is_available():
-            target = target.cuda(args.gpu, non_blocking=True)
+        target = target.cuda(args.gpu, non_blocking=True)
 
         # compute output
         output = model(images)
@@ -347,8 +369,7 @@ def validate(val_loader, model, criterion, args):
         for i, (images, target) in enumerate(val_loader):
             if args.gpu is not None:
                 images = images.cuda(args.gpu, non_blocking=True)
-            if torch.cuda.is_available():
-                target = target.cuda(args.gpu, non_blocking=True)
+            target = target.cuda(args.gpu, non_blocking=True)
 
             # compute output
             output = model(images)
