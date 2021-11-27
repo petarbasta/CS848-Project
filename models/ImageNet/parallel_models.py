@@ -8,6 +8,15 @@ n_gpus = torch.cuda.device_count()
 assert n_gpus == 2, f"MP ResNet requires exactly 2 GPUs to run, but got {n_gpus}"
 
 
+class DataParallelResNet50(ResNet):
+    def __init__(self, *args, **kwargs):
+        return super(DataParallelResNet50, self).__init__(
+            Bottleneck, [3, 4, 6, 3], *args, **kwargs)
+
+    def forward(self, x):
+        return super(DataParallelResNet50, self).forward(x)
+
+
 class ModelParallelResNet50(ResNet):
     def __init__(self, *args, **kwargs):
         super(ModelParallelResNet50, self).__init__(
@@ -32,8 +41,15 @@ class ModelParallelResNet50(ResNet):
         self.fc.to('cuda:1')
 
     def forward(self, x):
-        x = self.seq2(self.seq1(x).to('cuda:1'))
-        return self.fc(x.view(x.size(0), -1))
+        x = x.to('cuda:0')
+        x = self.seq1(x)
+        x = x.to('cuda:1')
+        x = self.seq2(x)
+        x = x.view(x.size(0), -1).to('cuda:1')
+        x = self.fc(x)
+        return x
+        #x = self.seq2(self.seq1(x).to('cuda:1'))
+        #return self.fc(x.view(x.size(0), -1))
 
 
 class PipelineParallelResNet50(ModelParallelResNet50):
@@ -59,3 +75,4 @@ class PipelineParallelResNet50(ModelParallelResNet50):
         ret.append(self.fc(s_prev.view(s_prev.size(0), -1)))
 
         return torch.cat(ret)
+

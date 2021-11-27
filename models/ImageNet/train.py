@@ -5,7 +5,7 @@ This is a modified version of the ImageNet training example script from the PyTo
 Original script: https://github.com/pytorch/examples/tree/master/imagenet
 Retrieval date: Nov 26, 2021
 
-python main.py -a resnet --parallelism dp /u4/jerorseth/datasets/ILSVRC/Data/CLS-LOC
+python train.py -a resnet --parallelism dp /u4/jerorseth/datasets/ILSVRC/Data/CLS-LOC
 
 Note 1: Data Parallelism (and Hybrid) only supports single node / multiple GPU training.
 Note 2: You can specify hyperparameters using other available arguments.
@@ -32,7 +32,7 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 from torchvision.models.resnet import ResNet
-from models.imagenet.resnet import ModelParallelResNet50
+from parallel_models import DataParallelResNet50, ModelParallelResNet50
 
 assert torch.cuda.is_available(), "CUDA must be available in order to run"
 n_gpus = torch.cuda.device_count()
@@ -41,12 +41,12 @@ assert n_gpus == 2, f"ImageNet training requires exactly 2 GPUs to run, but got 
 best_acc1 = 0
 device = torch.device('cuda:0')
 supported_model_architectures = ['resnet']
-supported_parallelism_strategies = ['dp', 'mp', 'hp']
+supported_parallelism_strategies = ['dp', 'mp'] # hp currently not working, may not be possible
 supported_models = {
     'resnet': {
-        'dp': ResNet,
+        'dp': DataParallelResNet50,
         'mp': ModelParallelResNet50,
-        'hp': ModelParallelResNet50
+        #'hp': ModelParallelResNet50
     }
 }
 
@@ -178,7 +178,13 @@ def main_worker(gpu, ngpus_per_node, args):
     # create model
     model = supported_models[args.arch][args.parallelism]()
 
-    if args.distributed:
+    if args.parallelism == 'hp':
+        torch.cuda.set_device(args.gpu)
+        args.batch_size = int(args.batch_size / ngpus_per_node)
+        args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
+        # If hp (ie. mp + dp) is specified, then device_ids and output_device must NOT be set!
+        model = torch.nn.parallel.DistributedDataParallel(model)
+    elif args.distributed: # dp
         # For multiprocessing distributed, DistributedDataParallel constructor
         # should always set the single device scope, otherwise,
         # DistributedDataParallel will use all available devices.
@@ -190,25 +196,12 @@ def main_worker(gpu, ngpus_per_node, args):
             # ourselves based on the total number of GPUs we have
             args.batch_size = int(args.batch_size / ngpus_per_node)
             args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-
-            # TODO: This line should not execute, since args.gpu is None, but...
-            # If hp (ie. mp + dp) is specified, then device_ids and output_device must NOT be set!
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
         else:
             model.cuda()
             # DistributedDataParallel will divide and allocate batch_size to all
             # available GPUs if device_ids are not set
             model = torch.nn.parallel.DistributedDataParallel(model)
-    elif args.gpu is not None:
-        torch.cuda.set_device(args.gpu)
-        model = model.cuda(args.gpu)
-    else:
-        # DataParallel will divide and allocate batch_size to all available GPUs
-        if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
-            model.features = torch.nn.DataParallel(model.features)
-            model.cuda()
-        else:
-            model = torch.nn.DataParallel(model).cuda()
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda(args.gpu)
@@ -324,9 +317,12 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         # measure data loading time
         data_time.update(time.time() - end)
 
-        if args.gpu is not None:
+        if args.parallelism == 'dp':
             images = images.cuda(args.gpu, non_blocking=True)
-        target = target.cuda(args.gpu, non_blocking=True)
+            target = target.cuda(args.gpu, non_blocking=True)
+        else: # mp
+            images = images.cuda(1, non_blocking=True)
+            target = target.cuda(1, non_blocking=True)
 
         # compute output
         output = model(images)
@@ -367,9 +363,13 @@ def validate(val_loader, model, criterion, args):
     with torch.no_grad():
         end = time.time()
         for i, (images, target) in enumerate(val_loader):
-            if args.gpu is not None:
+
+            if args.parallelism == 'dp':
                 images = images.cuda(args.gpu, non_blocking=True)
-            target = target.cuda(args.gpu, non_blocking=True)
+                target = target.cuda(args.gpu, non_blocking=True)
+            else: # mp
+                images = images.cuda(1, non_blocking=True)
+                target = target.cuda(1, non_blocking=True)
 
             # compute output
             output = model(images)
