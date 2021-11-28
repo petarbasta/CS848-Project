@@ -16,8 +16,10 @@ import os
 import random
 import shutil
 import time
+import json
 import warnings
 from enum import Enum
+from timeit import default_timer as timer
 
 import torch
 import torch.nn as nn
@@ -62,7 +64,7 @@ supported_models = {
 
 def init_args():
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-    parser.add_argument('data', metavar='DIR',
+    parser.add_argument('-d', '--data', metavar='DIR',
                         help='path to dataset')
     parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet',
                         choices=supported_model_architectures,
@@ -154,8 +156,9 @@ def main():
         args.world_size = int(os.environ["WORLD_SIZE"])
 
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
-
     ngpus_per_node = torch.cuda.device_count()
+
+    start_time = timer()
     if args.multiprocessing_distributed:
         # Since we have ngpus_per_node processes per node, the total world_size
         # needs to be adjusted accordingly
@@ -166,6 +169,11 @@ def main():
     else:
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args)
+    end_time = timer()
+
+    # After workers have completed, output statistics
+    final_output = {'accuracy': best_acc1, 'runtime': end_time - start_time}
+    print(json.dumps(final_output))
 
 
 def main_worker(gpu, ngpus_per_node, args):
@@ -188,13 +196,10 @@ def main_worker(gpu, ngpus_per_node, args):
     model = supported_models[args.arch][args.parallelism]()
 
     if args.parallelism == 'gpipe':
-        # Input has shape: torch.Size([256, 3, 224, 224])
-        #partitions = torch.cuda.device_count()
-        #sample = torch.rand(128, 3, 224, 224)
-        #balance = balance_by_time(partitions, model, sample)
-        #print(f"Balance: {balance}") # [57, 126]
-        #model = GPipe(model, balance, chunks=8)
-        model = GPipe(model, balance=[57, 126], chunks=8)
+        partitions = torch.cuda.device_count()
+        sample = torch.rand(128, 3, 224, 224)
+        balance = balance_by_time(partitions, model, sample)
+        model = GPipe(model, balance, chunks=8)
     elif args.parallelism == 'hp':
         torch.cuda.set_device(args.gpu)
         args.batch_size = int(args.batch_size / ngpus_per_node)
@@ -230,6 +235,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
 
+    """
     # optionally resume from a checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
@@ -251,7 +257,7 @@ def main_worker(gpu, ngpus_per_node, args):
                   .format(args.resume, checkpoint['epoch']))
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
-
+    """
     cudnn.benchmark = True
 
     # Data loading code
@@ -307,6 +313,7 @@ def main_worker(gpu, ngpus_per_node, args):
         is_best = acc1 > best_acc1
         best_acc1 = max(acc1, best_acc1)
 
+        """
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank % ngpus_per_node == 0):
             save_checkpoint({
@@ -316,7 +323,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'best_acc1': best_acc1,
                 'optimizer' : optimizer.state_dict(),
             }, is_best)
-
+        """
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
     batch_time = AverageMeter('Time', ':6.3f')
@@ -343,6 +350,9 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         elif args.parallelism == 'mp':
             images = images.cuda(1, non_blocking=True)
             target = target.cuda(1, non_blocking=True)
+        elif args.parallelism == 'gpipe':
+            images = images.to(model.devices[0], non_blocking=True)
+            target = target.to(model.devices[-1], non_blocking=True)
 
         # compute output
         output = model(images)
@@ -390,6 +400,9 @@ def validate(val_loader, model, criterion, args):
             elif args.parallelism == 'mp':
                 images = images.cuda(1, non_blocking=True)
                 target = target.cuda(1, non_blocking=True)
+            elif args.parallelism == 'gpipe':
+                images = images.to(model.devices[0], non_blocking=True)
+                target = target.to(model.devices[-1], non_blocking=True)
 
             # compute output
             output = model(images)
