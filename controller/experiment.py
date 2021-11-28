@@ -14,8 +14,8 @@ class ExperimentConfig:
             self.train_args  = args_dict
 
 class Experiment:
-    def __init__(self, experiment_config, hyperparameter_space) -> None:
-        self.scheduler = ParallelRoundRobinScheduler(experiment_config, hyperparameter_space)
+    def __init__(self, experiment_config, hyperparameter_space, logger) -> None:
+        self.scheduler = ParallelRoundRobinScheduler(experiment_config, hyperparameter_space, logger)
 
     def run(self):
         trial_results = self.scheduler.run()

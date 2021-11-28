@@ -3,6 +3,7 @@
 import argparse
 import json
 import sys
+import logging
 from experiment import Experiment, ExperimentConfig
 from hyperparameters import HyperparameterSpace
 from evaluator import Evaluator
@@ -31,9 +32,13 @@ def init_args():
     parser.add_argument('--dnn_train_args', required=True, type=str, help='The JSON file defining arguments to pass to DNN training script')
     parser.add_argument('--dnn_metric_key', required=True, type=str, help='The key for the relevant metric to extract from DNN JSON output')
     parser.add_argument('--dnn_metric_objective', required=True, choices=['max', 'min'], help='Whether to maximize or minimize the metric')
+    parser.add_argument('--debug', help="Print all debugging statements", action="store_const",
+            dest="loglevel", const=logging.DEBUG, default=logging.WARNING)
+    parser.add_argument('--verbose', help="Print all logging statements", action="store_const", dest="loglevel", const=logging.INFO)
+    
     args = parser.parse_args()
     if not args.password:
-        args.password = getpass('Password for SSH to remote machines:') 
+        args.password = getpass('Password for SSH to remote machines:')
     return args
 
 def init_hyperparameter_space(path):
@@ -45,17 +50,25 @@ def main():
     args = init_args()
     hyperparameter_space = init_hyperparameter_space(args.dnn_hyperparameter_space)
 
+    # Create logger that will be shared with all modules
+    logger = logging.getLogger(__name__)
+    logger.setLevel(args.loglevel)
+    log_handler = logging.StreamHandler(sys.stdout)
+    log_handler.setLevel(args.loglevel)
+    log_handler.setFormatter(logging.Formatter('[%(asctime)s %(levelname)s] %(message)s'))
+    logger.addHandler(log_handler)
+
     experiment_config = ExperimentConfig(args)
-    experiment = Experiment(experiment_config, hyperparameter_space)
+    experiment = Experiment(experiment_config, hyperparameter_space, logger)
     
     all_trial_results = experiment.run()
     all_printout = "\n".join(str(r) for r in all_trial_results)
-    print(f"[CONTROLLER.PY] All Trial Results:")
+    print(f"All Trial Results:")
     print(all_printout)
 
     evaluator = Evaluator(args.dnn_metric_objective == 'min')
     best_trial_result = evaluator.get_best(all_trial_results) 
-    print(f"[CONTROLLER.PY] Best Trial Result:")
+    print(f"Best Trial Result:")
     print(str(best_trial_result))
 
 

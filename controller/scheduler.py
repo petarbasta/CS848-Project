@@ -1,16 +1,18 @@
 import time
 import os
+import logging
 from multiprocessing import Process, Queue, Lock, Manager
 from trial import Trial, TrialConfig
 
 class ParallelRoundRobinScheduler:
-    def __init__(self, experiment_config, hyperparameter_space) -> None:
+    def __init__(self, experiment_config, hyperparameter_space, logger) -> None:
         self.experiment_config = experiment_config
         self.hyperparameter_space = hyperparameter_space
+        self.logger = logger
 
     def producer(self, queue, lock, results):
         with lock:
-            print(f"[SCHEDULER.PY] Starting producer with PID {os.getpid()}")
+            self.logger.debug(f"Starting producer with PID {os.getpid()}")
 
         for hyperparameter_config in self.hyperparameter_space:
             queue.put(hyperparameter_config)
@@ -20,24 +22,20 @@ class ParallelRoundRobinScheduler:
             time.sleep(1)
 
         with lock:
-            print(f"[SCHEDULER.PY] Producer {os.getpid()} exiting...")
+            self.logger.debug=(f"Producer {os.getpid()} exiting...")
 
     def consumer(self, queue, lock, machine, results):
         with lock:
-            print(f"[SCHEDULER.PY] Assigning machine {machine} to PID {os.getpid()}")
+            self.logger.debug(f"Assigning machine {machine} to PID {os.getpid()}")
 
         while True:
             # Block until the queue has a hyperparameter config to retrieve
             hyperparameter_config = queue.get()
-            
-            trial_config = TrialConfig(machine, self.experiment_config.remote_username,
-                    self.experiment_config.remote_password, self.experiment_config.venv_dir,
-                    self.experiment_config.train_file, self.experiment_config.train_args,
-                    self.experiment_config.dnn_metric_key)
-            trial = Trial(trial_config, hyperparameter_config)
+            trial_config = TrialConfig(machine, self.experiment_config)
+            trial = Trial(trial_config, hyperparameter_config, self.logger)
 
             with lock:
-                print(f"[SCHEDULER.PY] {machine} is now training hyperparameter config {hyperparameter_config.get_dict()}...")
+                self.logger.debug(f"{machine} now training {hyperparameter_config.get_dict()}...")
 
             trial_result = trial.run()
 
@@ -45,7 +43,7 @@ class ParallelRoundRobinScheduler:
             results.append(trial_result)
 
             with lock:
-                print(f"[SCHEDULER.PY] {machine} has finished training hyperparameter config {hyperparameter_config.get_dict()}")
+                self.logger.debug(f"{machine} finished training {hyperparameter_config.get_dict()}")
 
     def run(self):
         queue = Queue()
@@ -74,6 +72,6 @@ class ParallelRoundRobinScheduler:
         for p in producers:
             p.join()
 
-        print("[SCHEDULER.PY] All trials have been executed")
+        self.logger.debug("All trials have now been executed!")
         return results
 
