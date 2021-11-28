@@ -1,0 +1,6 @@
+{
+	"arch": "resnet",
+	"parallelism": "mp",
+	"data": "/u4/jerorseth/datasets/ILSVRC/Data/CLS-LOC",
+	"epochs": 1
+}
