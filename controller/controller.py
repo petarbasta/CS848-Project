@@ -23,6 +23,7 @@ python controller.py \
 def init_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--username', required=True, type=str, help='Username for SSH to remote machines')
+    parser.add_argument('--password', required=False, type=str, help='Password for SSH to remote machines')
     parser.add_argument('--machines', required=True, nargs='+', help='All remote machines to utilize')
     parser.add_argument('--venv', required=True, type=str, help='The venv directory')
     parser.add_argument('--dnn', required=True, type=str, help='The Python file containing the PyTorch DNN training job')
@@ -31,7 +32,8 @@ def init_args():
     parser.add_argument('--dnn_metric_key', required=True, type=str, help='The key for the relevant metric to extract from DNN JSON output')
     parser.add_argument('--dnn_metric_objective', required=True, choices=['max', 'min'], help='Whether to maximize or minimize the metric')
     args = parser.parse_args()
-    args.password = getpass('Password for SSH to remote machines:') 
+    if not args.password:
+        args.password = getpass('Password for SSH to remote machines:') 
     return args
 
 def init_hyperparameter_space(path):
