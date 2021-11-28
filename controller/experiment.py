@@ -4,6 +4,7 @@ from scheduler import ParallelRoundRobinScheduler
 class ExperimentConfig:
     def __init__(self, controller_args) -> None:
         self.remote_username = controller_args.username
+        self.remote_password = controller_args.password
         self.remote_machines = controller_args.machines
         self.venv_dir = controller_args.venv
         self.train_file = controller_args.dnn

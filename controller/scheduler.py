@@ -31,8 +31,9 @@ class ParallelRoundRobinScheduler:
             hyperparameter_config = queue.get()
             
             trial_config = TrialConfig(machine, self.experiment_config.remote_username,
-                    self.experiment_config.venv_dir, self.experiment_config.train_file,
-                    self.experiment_config.train_args, self.experiment_config.dnn_metric_key)
+                    self.experiment_config.remote_password, self.experiment_config.venv_dir,
+                    self.experiment_config.train_file, self.experiment_config.train_args,
+                    self.experiment_config.dnn_metric_key)
             trial = Trial(trial_config, hyperparameter_config)
 
             with lock:

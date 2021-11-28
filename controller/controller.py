@@ -6,6 +6,7 @@ import sys
 from experiment import Experiment, ExperimentConfig
 from hyperparameters import HyperparameterSpace
 from evaluator import Evaluator
+from getpass import getpass
 
 """
 python controller.py \
@@ -29,8 +30,8 @@ def init_args():
     parser.add_argument('--dnn_train_args', required=True, type=str, help='The JSON file defining arguments to pass to DNN training script')
     parser.add_argument('--dnn_metric_key', required=True, type=str, help='The key for the relevant metric to extract from DNN JSON output')
     parser.add_argument('--dnn_metric_objective', required=True, choices=['max', 'min'], help='Whether to maximize or minimize the metric')
-
     args = parser.parse_args()
+    args.password = getpass('Password for SSH to remote machines:') 
     return args
 
 def init_hyperparameter_space(path):
