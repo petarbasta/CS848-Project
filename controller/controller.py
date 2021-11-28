@@ -10,8 +10,9 @@ from evaluator import Evaluator
 """
 python controller.py \
         --venv /u4/jerorset/cs848/CS848-Project/venv \
-        --dnn /u4/jerorset/cs848/CS848-Project/models/Fake/train.py  \
-        --dnn_hyperparameter_space /u4/jerorset/cs848/CS848-Project/models/Fake/hyperparameter_space.json \
+        --dnn /u4/jerorset/cs848/CS848-Project/models/ImageNet/train.py  \
+        --dnn_hyperparameter_space /u4/jerorset/cs848/CS848-Project/models/ImageNet/hyperparameter_space_resnet.json \
+        --dnn_train_args /u4/jerorset/cs848/CS848-Project/models/ImageNet/train_args_mp_resnet.json \
         --dnn_metric_key accuracy \
         --dnn_metric_objective max \
         --username jerorset \
@@ -25,6 +26,7 @@ def init_args():
     parser.add_argument('--venv', required=True, type=str, help='The venv directory')
     parser.add_argument('--dnn', required=True, type=str, help='The Python file containing the PyTorch DNN training job')
     parser.add_argument('--dnn_hyperparameter_space', required=True, type=str, help='The JSON file defining the DNN hyperparameter space')
+    parser.add_argument('--dnn_train_args', required=True, type=str, help='The JSON file defining arguments to pass to DNN training script')
     parser.add_argument('--dnn_metric_key', required=True, type=str, help='The key for the relevant metric to extract from DNN JSON output')
     parser.add_argument('--dnn_metric_objective', required=True, choices=['max', 'min'], help='Whether to maximize or minimize the metric')
 
