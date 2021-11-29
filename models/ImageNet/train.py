@@ -36,7 +36,6 @@ import torchvision.datasets as datasets
 from torchgpipe import GPipe
 from torchgpipe.balance import balance_by_time, balance_by_size
 from torchvision.models.resnet import ResNet
-#from parallel_models import DataParallelResNet50, ModelParallelResNet50
 from parallel_models import (
     build_dp_resnet,
     build_mp_resnet,
@@ -48,16 +47,13 @@ n_gpus = torch.cuda.device_count()
 assert n_gpus == 2, f"ImageNet training requires exactly 2 GPUs to run, but got {n_gpus}"
 
 best_acc1 = 0
-device = torch.device('cuda:0')
 supported_model_architectures = ['resnet']
-# hp currently not working, may not be possible
 supported_parallelism_strategies = ['dp', 'mp', 'gpipe']
 supported_models = {
     'resnet': {
         'dp': build_dp_resnet,
         'mp': build_mp_resnet,
         'gpipe': build_gpipe_resnet,
-        #'hp': ModelParallelResNet50
     }
 }
 
@@ -172,8 +168,10 @@ def main():
     end_time = timer()
 
     # After workers have completed, output statistics
-    final_output = {'accuracy': best_acc1, 'runtime': end_time - start_time}
-    print(json.dumps(final_output))
+    reported_acc = best_acc1.item() if torch.is_tensor(best_acc1) else float(best_acc1)
+    reported_runtime = end_time - start_time
+    reported_stats = {'accuracy': reported_acc, 'runtime': reported_runtime}
+    print(json.dumps(reported_stats))
 
 
 def main_worker(gpu, ngpus_per_node, args):
