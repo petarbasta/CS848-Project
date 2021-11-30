@@ -46,7 +46,6 @@ assert torch.cuda.is_available(), "CUDA must be available in order to run"
 n_gpus = torch.cuda.device_count()
 assert n_gpus == 2, f"ImageNet training requires exactly 2 GPUs to run, but got {n_gpus}"
 
-best_acc1 = 0
 supported_model_architectures = ['resnet']
 supported_parallelism_strategies = ['dp', 'mp', 'gpipe']
 supported_models = {
@@ -153,6 +152,9 @@ def main():
 
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
     ngpus_per_node = torch.cuda.device_count()
+    
+    manager = mp.Manager()
+    best_accuracy = manager.Value('d', 0)
 
     start_time = timer()
     if args.multiprocessing_distributed:
@@ -161,21 +163,18 @@ def main():
         args.world_size = ngpus_per_node * args.world_size
         # Use torch.multiprocessing.spawn to launch distributed processes: the
         # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
+        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args, best_accuracy))
     else:
         # Simply call main_worker function
-        main_worker(args.gpu, ngpus_per_node, args)
+        main_worker(args.gpu, ngpus_per_node, args, best_accuracy)
     end_time = timer()
 
     # After workers have completed, output statistics
-    reported_acc = best_acc1.item() if torch.is_tensor(best_acc1) else float(best_acc1)
-    reported_runtime = end_time - start_time
-    reported_stats = {'accuracy': reported_acc, 'runtime': reported_runtime}
+    reported_stats = {'accuracy': best_accuracy.value, 'runtime': end_time - start_time}
     print(json.dumps(reported_stats))
 
 
-def main_worker(gpu, ngpus_per_node, args):
-    global best_acc1
+def main_worker(gpu, ngpus_per_node, args, best_accuracy):
     args.gpu = gpu
 
     if args.gpu is not None:
@@ -308,8 +307,9 @@ def main_worker(gpu, ngpus_per_node, args):
         acc1 = validate(val_loader, model, criterion, args)
 
         # remember best acc@1 and save checkpoint
-        is_best = acc1 > best_acc1
-        best_acc1 = max(acc1, best_acc1)
+        accuracy_num = acc1.item() if torch.is_tensor(acc1) else float(acc1)
+        # is_best = accuracy_num > best_accuracy.value
+        best_accuracy.value = max(accuracy_num, best_accuracy.value)
 
         """
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
@@ -391,7 +391,6 @@ def validate(val_loader, model, criterion, args):
     with torch.no_grad():
         end = time.time()
         for i, (images, target) in enumerate(val_loader):
-
             if args.parallelism == 'dp':
                 images = images.cuda(args.gpu, non_blocking=True)
                 target = target.cuda(args.gpu, non_blocking=True)
