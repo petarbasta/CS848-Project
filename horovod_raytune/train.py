@@ -11,7 +11,7 @@ Note 1: Data Parallelism (and Hybrid) only supports single node / multiple GPU t
 Note 2: You can specify hyperparameters using other available arguments.
 """
 
-import argparse
+#import argparse
 import os
 import random
 import shutil
@@ -44,11 +44,11 @@ import torchvision.datasets as datasets
 
 import horovod.torch as hvd
 from ray import tune
-from models import build_horovod_raytune_resnet
+from custom_models import build_horovod_raytune_resnet
 
-assert torch.cuda.is_available(), "CUDA must be available in order to run"
-n_gpus = torch.cuda.device_count()
-assert n_gpus == 2, f"ImageNet training requires exactly 2 GPUs to run, but got {n_gpus}"
+#assert torch.cuda.is_available(), "CUDA must be available in order to run"
+#n_gpus = torch.cuda.device_count()
+#assert n_gpus == 2, f"ImageNet training requires exactly 2 GPUs to run, but got {n_gpus}"
 
 
 supported_model_architectures = ['resnet']
@@ -73,8 +73,12 @@ def init_args(config, data, arch):
     def get_arg(key, default_val):
         return config[key] if key in config else default_val
 
-    #parser = argparse.ArgumentParser(description='Horovod + RayTune PyTorch ImageNet Training')
-    args = {'data': data, 'arch': arch}
+    #parser = argparse.ArgumentParser()
+    #args = parser.parse_args()
+    
+    args = type('', (), {})()
+    args.data = data
+    args.arch = arch
     
     args.workers = get_arg('workers', 4)
     args.epochs = get_arg('epochs', 90)
@@ -105,11 +109,15 @@ def init_args(config, data, arch):
 
 
 def run_training(config, checkpoint_dir=None, data=None, arch=None):
+    assert torch.cuda.is_available(), "CUDA must be available in order to run"
+    n_gpus = torch.cuda.device_count()
+    assert n_gpus == 2, f"ImageNet training requires exactly 2 GPUs to run, but got {n_gpus}"
+
     assert data is not None, "Dataset path is not specified"
     assert arch is not None, "Architecture is not specified"
 
     hvd.init()
-    hvd.allreduce()
+    #hvd.allreduce()
 
     # Pin GPU to be used to process local rank (one GPU per process)
     torch.cuda.set_device(hvd.local_rank())
@@ -278,6 +286,15 @@ def main_worker(args):
             transforms.ToTensor(),
             normalize,
         ]))
+    
+    val_dataset = datasets.ImageFolder(
+        valdir,
+        transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            normalize,
+        ]))
 
     """
     if args.distributed:
@@ -294,19 +311,16 @@ def main_worker(args):
     train_sampler = torch.utils.data.distributed.DistributedSampler(
             train_dataset, num_replicas=hvd.size(), rank=hvd.rank())
 
-    train_loader = torch.utils.data.DataLoader(train_dataset,
-            batch_size=args.batch_size, sampler=train_sampler)
+    val_sampler = torch.utils.data.distributed.DistributedSampler(
+            val_dataset, num_replicas=hvd.size(), rank=hvd.rank())
 
+    train_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
     val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            normalize,
-        ])),
-        batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+            val_dataset, batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True, sampler=val_sampler)
 
     """
     if args.evaluate:
@@ -365,17 +379,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         # measure data loading time
         data_time.update(time.time() - end)
 
-        """
-        if args.parallelism == 'dp':
-            images = images.cuda(args.gpu, non_blocking=True)
-            target = target.cuda(args.gpu, non_blocking=True)
-        elif args.parallelism == 'mp':
-            images = images.cuda(1, non_blocking=True)
-            target = target.cuda(1, non_blocking=True)
-        elif args.parallelism == 'gpipe':
-            images = images.to(model.devices[0], non_blocking=True)
-            target = target.to(model.devices[-1], non_blocking=True)
-        """
+        images, target = images.cuda(), target.cuda()
 
         # compute output
         output = model(images)
@@ -416,17 +420,7 @@ def validate(val_loader, model, criterion, args):
     with torch.no_grad():
         end = time.time()
         for i, (images, target) in enumerate(val_loader):
-            """
-            if args.parallelism == 'dp':
-                images = images.cuda(args.gpu, non_blocking=True)
-                target = target.cuda(args.gpu, non_blocking=True)
-            elif args.parallelism == 'mp':
-                images = images.cuda(1, non_blocking=True)
-                target = target.cuda(1, non_blocking=True)
-            elif args.parallelism == 'gpipe':
-                images = images.to(model.devices[0], non_blocking=True)
-                target = target.to(model.devices[-1], non_blocking=True)
-            """
+            images, target = images.cuda(), target.cuda()
 
             # compute output
             output = model(images)

@@ -10,10 +10,10 @@ from ray.tune.integration.horovod import DistributedTrainableCreator
 from train import run_training
 
 """
-python horovod/controller.py \
+python horovod_raytune/controller.py \
         --data /u4/jerorseth/datasets/ILSVRC/Data/CLS-LOC \
         --arch resnet \
-        --dnn_hyperparameter_space /u4/jerorset/cs848/CS848-Project/horovod/hyperparameter_space_resnet.json \
+        --dnn_hyperparameter_space /u4/jerorset/cs848/CS848-Project/horovod_raytune/hyperparameter_space_resnet.json \
         --dnn_metric_key accuracy \
         --dnn_metric_objective max
 """
@@ -67,21 +67,6 @@ def main():
     log_handler.setLevel(args.loglevel)
     log_handler.setFormatter(logging.Formatter('[%(asctime)s %(levelname)s] %(message)s'))
     logger.addHandler(log_handler)
-    """
-
-    """
-    experiment_config = ExperimentConfig(args)
-    experiment = Experiment(experiment_config, hyperparameter_space, logger)
-    
-    all_trial_results = experiment.run()
-    all_printout = "\n".join(str(r) for r in all_trial_results)
-    print(f"All Trial Results:")
-    print(all_printout)
-
-    evaluator = Evaluator(args.dnn_metric_objective == 'min')
-    best_trial_result = evaluator.get_best(all_trial_results) 
-    print(f"Best Trial Result:")
-    print(str(best_trial_result))
     """
 
     trainable = DistributedTrainableCreator(
