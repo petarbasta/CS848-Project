@@ -6,7 +6,6 @@ from typing import Any, List
 from gpipe_bottleneck import bottleneck
 from gpipe_flatten_sequential import flatten_sequential
 
-
 # NOTE: We assume host machine has 2 GPUs
 assert torch.cuda.is_available(), "CUDA must be available in order to run"
 n_gpus = torch.cuda.device_count()
@@ -68,10 +67,51 @@ class ModelParallelResNet50(ResNet):
         x = self.fc(x)
         return x
 
+class ModelParallelAlexNet(AlexNet):
+    def __init__(self, num_classes: int = 1000) -> None:
+        super(ModelParallelAlexNet, self).__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=11, stride=4, padding=2),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(64, 192, kernel_size=5, padding=2),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(192, 384, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(384, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+        ).to('cuda:0')
+
+        self.avgpool = nn.AdaptiveAvgPool2d((6, 6)).to('cuda:1')
+
+        self.classifier = nn.Sequential(
+            nn.Dropout(),
+            nn.Linear(256 * 6 * 6, 4096),
+            nn.ReLU(inplace=True),
+            nn.Dropout(),
+            nn.Linear(4096, 4096),
+            nn.ReLU(inplace=True),
+            nn.Linear(4096, num_classes),
+        ).to('cuda:1')
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.to('cuda:0')
+        x = self.features(x)
+        x = x.to('cuda:1')
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
+        return x
 
 def build_mp_resnet():
     return ModelParallelResNet50()
 
+def build_mp_alexnet(num_classes: int = 1000):
+    return ModelParallelAlexNet(num_classes = num_classes)
 
 # pytorchgpipe compatible ResNet rewritten as nn.Sequential
 # Source: https://github.com/kakaobrain/torchgpipe/blob/master/benchmarks/models/resnet/
@@ -151,5 +191,6 @@ def _build_sequential_resnet(layers: List[int],
 
 def build_gpipe_resnet(**kwargs: Any) -> nn.Sequential:
     return _build_sequential_resnet(resnet_layers, **kwargs)
+
 
 
