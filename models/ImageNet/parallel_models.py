@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torchvision.models.resnet import ResNet, Bottleneck
+from torchvision.models.resnet import ResNet, AlexNet, Bottleneck
 from collections import OrderedDict
 from typing import Any, List
 from gpipe_bottleneck import bottleneck
@@ -22,9 +22,18 @@ class DataParallelResNet50(ResNet):
     def forward(self, x):
         return super(DataParallelResNet50, self).forward(x)
 
+class DataParallelAlexNet(AlexNet):
+    def __init__(self, *args, **kwargs):
+        return super(DataParallelAlexNet, self).__init__(*args, **kwargs)
+
+    def forward(self, x):
+        return super(DataParallelAlexNet, self).forward(x)
 
 def build_dp_resnet():
     return DataParallelResNet50()
+
+def build_dp_alexnet():
+    return DataParallelAlexNet()
 
 
 class ModelParallelResNet50(ResNet):
@@ -142,4 +151,5 @@ def _build_sequential_resnet(layers: List[int],
 
 def build_gpipe_resnet(**kwargs: Any) -> nn.Sequential:
     return _build_sequential_resnet(resnet_layers, **kwargs)
+
 
