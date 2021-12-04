@@ -19,7 +19,7 @@ def main():
     args = init_args()
     fake_accuracy = round(random.uniform(0,1), 3)
 
-    output = {'accuracy': fake_accuracy}
+    output = {'accuracy': fake_accuracy, 'runtime': 400 }
     print(json.dumps(output))
     #print(f"[FAKE_DNN.PY {args.fake_arg_1} {args.fake_arg_2}] Accuracy is {fake_score}")
 
