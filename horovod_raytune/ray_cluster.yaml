@@ -1,0 +1,37 @@
+cluster_name: horovod-raytune-cluster
+
+provider:
+    type: local
+    head_ip: 129.97.167.29
+    worker_ips: [192.168.167.171, 192.168.167.172, 192.168.167.173]
+
+auth:
+    ssh_user: "jerorset"
+
+min_workers: 3
+max_workers: 3
+upscaling_speed: 1.0
+idle_timeout_minutes: 720 # 12 hrs
+file_mounts: {}
+cluster_synced_files: []
+file_mounts_sync_continuously: False
+
+rsync_exclude:
+    - "**/.git"
+    - "**/.git/**"
+
+rsync_filter:
+    - ".gitignore"
+
+initialization_commands: []
+setup_commands: []
+head_setup_commands: []
+worker_setup_commands: []
+
+head_start_ray_commands:
+    - source /u4/jerorseth/cs848/CS848-Project/venv/bin/activate && ray stop
+    - source /u4/jerorseth/cs848/CS848-Project/venv/bin/activate && ulimit -c unlimited && ray start --head --port=6379 --autoscaling-config=~/ray_bootstrap_config.yaml
+
+worker_start_ray_commands:
+    - source /u4/jerorseth/cs848/CS848-Project/venv/bin/activate && ray stop
+    - source /u4/jerorseth/cs848/CS848-Project/venv/bin/activate && ray start --address=$RAY_HEAD_IP:6379

@@ -71,11 +71,13 @@ def main():
 
     trainable = DistributedTrainableCreator(
             tune.with_parameters(run_training, data=args.data, arch=args.arch),
+            num_cpus_per_slot=1, # 1 CPU for each Ray worker
             num_hosts=1, # Each trial runs on 1 machine
             num_slots=2, # Each trial will employ 2 workers (GPUs)
             use_gpu=True)
     # TODO: More arguments can be specified, see https://docs.ray.io/en/latest/tune/api_docs/execution.html
     # Run grid search (which is the default optimization strategy)
+    print(hyperparameter_space_dict)
     analysis = tune.run(
             trainable,
             metric=args.dnn_metric_key, # TODO: Pass this key to trainable as regular param
