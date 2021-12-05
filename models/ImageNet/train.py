@@ -39,7 +39,9 @@ from torchvision.models.resnet import ResNet
 from parallel_models import (
     build_dp_resnet,
     build_mp_resnet,
-    build_gpipe_resnet        
+    build_gpipe_resnet,
+    build_dp_alexnet,
+    build_mp_alexnet      
 )
 
 assert torch.cuda.is_available(), "CUDA must be available in order to run"
@@ -53,6 +55,10 @@ supported_models = {
         'dp': build_dp_resnet,
         'mp': build_mp_resnet,
         'gpipe': build_gpipe_resnet,
+    },
+    'alexnet': {
+        'dp': build_dp_alexnet,
+        'mp': build_mp_alexnet
     }
 }
 
@@ -522,3 +528,5 @@ def accuracy(output, target, topk=(1,)):
 
 if __name__ == '__main__':
     main()
+
+
