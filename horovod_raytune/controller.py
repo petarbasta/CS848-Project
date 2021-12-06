@@ -5,6 +5,7 @@ import json
 import sys
 import logging
 #from getpass import getpass
+import ray
 from ray import tune
 from ray.tune.integration.horovod import DistributedTrainableCreator
 from train import run_training
@@ -78,6 +79,8 @@ def main():
     # TODO: More arguments can be specified, see https://docs.ray.io/en/latest/tune/api_docs/execution.html
     # Run grid search (which is the default optimization strategy)
     print(hyperparameter_space_dict)
+
+    ray.init(address='auto')
     analysis = tune.run(
             trainable,
             metric=args.dnn_metric_key, # TODO: Pass this key to trainable as regular param
@@ -85,7 +88,10 @@ def main():
             #name="MyExperiment", # Name the experiment
             #num_samples=1, # Irrelevant when used with grid search
             #verbose=3, # 0,1,2,3, where 0 is least noisy
-            config=hyperparameter_space_dict)
+            config=hyperparameter_space_dict,
+            sync_config=tune.SyncConfig(
+                syncer=None # Disable syncing when all nodes share filesystem
+            ))
 
     print(analysis.best_config)
 

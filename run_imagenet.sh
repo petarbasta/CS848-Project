@@ -20,7 +20,7 @@ check_file_exists() {
 }
 
 
-echo Welcome to HyperTune Image Runner!
+echo Welcome to HyperTune ImageNet Runner!
 echo
 echo =============================
 echo "[1/4] Specify parameters"
