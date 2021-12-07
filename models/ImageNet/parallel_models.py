@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from torchvision.models.resnet import ResNet, AlexNet, Bottleneck
+from torchvision.models.resnet import ResNet, Bottleneck
+from torchvision.models.alexnet import AlexNet
 from collections import OrderedDict
 from typing import Any, List
 from gpipe_bottleneck import bottleneck
