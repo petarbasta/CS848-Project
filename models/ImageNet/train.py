@@ -33,6 +33,11 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
+import os, sys
+currentdir = os.path.dirname(os.path.realpath(__file__))
+parentdir = os.path.dirname(currentdir)
+sys.path.append(parentdir)
+
 from torchgpipe import GPipe
 from torchgpipe.balance import balance_by_time, balance_by_size
 from torchvision.models.resnet import ResNet
@@ -46,7 +51,7 @@ from parallel_models import (
 
 assert torch.cuda.is_available(), "CUDA must be available in order to run"
 n_gpus = torch.cuda.device_count()
-assert n_gpus == 2, f"ImageNet training requires exactly 2 GPUs to run, but got {n_gpus}"
+assert n_gpus == 2, "ImageNet training requires exactly 2 GPUs to run, but got {n_gpus}"
 
 supported_model_architectures = ['resnet']
 supported_parallelism_strategies = ['dp', 'mp', 'gpipe']
