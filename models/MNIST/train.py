@@ -32,7 +32,8 @@ from parallel_models import (
     build_mp_resnet,
     build_gpipe_resnet,
     build_dp_alexnet,
-    build_mp_alexnet      
+    build_mp_alexnet,
+    build_gpipe_alexnet
 )      
 
 
@@ -50,7 +51,8 @@ supported_models = {
     },
     'alexnet': {
         'dp': build_dp_alexnet,
-        'mp': build_mp_alexnet
+        'mp': build_mp_alexnet,
+        'gpipe': build_gpipe_alexnet
     }
 }
 
@@ -164,22 +166,25 @@ def main():
 
     manager = mp.Manager()
     best_accuracy = manager.Value('d', 0)
+    mem_params = manager.Value('d', 0)
+    mem_bufs = manager.Value('d', 0)
+    mem_peak = manager.Value('d', 0)
 
     start_time = timer()
 
     if args.parallelism == "dp":
         args.world_size = ngpus_per_node * args.world_size
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args, best_accuracy))
+        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args, best_accuracy, mem_params, mem_bufs, mem_peak))
     else:
-        main_worker(args.gpu, ngpus_per_node, args, best_accuracy)
+        main_worker(args.gpu, ngpus_per_node, args, best_accuracy, mem_params, mem_bufs, mem_peak)
 
     end_time = timer()
 
-    reported_stats = {'accuracy': best_accuracy.value, 'runtime': end_time - start_time}
+    reported_stats = {'accuracy': best_accuracy.value, 'runtime': end_time - start_time, 'mem_params': mem_params.value, 'mem_bufs': mem_bufs.value, 'mem_peak': mem_peak.value }
     print(json.dumps(reported_stats))
 
     
-def main_worker(gpu, ngpus_per_node, args, best_accuracy):
+def main_worker(gpu, ngpus_per_node, args, best_accuracy, mem_params, mem_bufs, mem_peak):
     args.gpu = gpu
 
     # Initialize process group
@@ -200,6 +205,7 @@ def main_worker(gpu, ngpus_per_node, args, best_accuracy):
         test_kwargs.update(cuda_kwargs)
 
     transform=transforms.Compose([
+        transforms.Resize((227, 227)),
         transforms.ToTensor(),
         transforms.Normalize((0.1307,), (0.3081,))
         ])
@@ -234,9 +240,13 @@ def main_worker(gpu, ngpus_per_node, args, best_accuracy):
         # Update best accuracy across all epochs
         best_accuracy.value = max(accuracy, best_accuracy.value)
 
+    mem_params.value = sum([param.nelement()*param.element_size() for param in model.parameters()])
+    mem_bufs.value = sum([buf.nelement()*buf.element_size() for buf in model.buffers()])
+    mem_peak.value = torch.cuda.max_memory_allocated()
     #if args.save_model:
     #    torch.save(model.state_dict(), "mnist_cnn.pt")
 
 
 if __name__ == '__main__':
     main()
+

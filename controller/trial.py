@@ -14,13 +14,16 @@ class TrialConfig:
         self.dnn_metric_key = experiment_config.dnn_metric_key
 
 class TrialResult:
-    def __init__(self, hyperparameter_config, value, runtime) -> None:
+    def __init__(self, hyperparameter_config, value, runtime, mem_params, mem_bufs, mem_peak) -> None:
         self.hyperparameter_config = hyperparameter_config
         self.value = value
         self.runtime = runtime
+        self.mem_params = mem_params
+        self.mem_bufs = mem_bufs
+        self.mem_peak = mem_peak
 
     def __str__(self):
-        return f"{self.hyperparameter_config.get_dict()}: {self.value}, runtime: {self.runtime}"
+        return f"{self.hyperparameter_config.get_dict()}: {self.value}, runtime: {self.runtime}, mem_params: {self.mem_params}, mem_bufs: {self.mem_bufs}, mem_peak: {self.mem_peak}"
 
 class Trial:
     def __init__(self, trial_config, hyperparameter_config, logger) -> None:
@@ -60,9 +63,17 @@ class Trial:
         statistics_dict = json.loads(output)
         reported_metric = float(statistics_dict[self.trial_config.dnn_metric_key])
         reported_runtime = statistics_dict['runtime']
+        reported_mem_params = statistics_dict['mem_params']
+        reported_mem_bufs = statistics_dict['mem_params']
+        reported_mem_peak = statistics_dict['mem_params']
+
         return TrialResult(
             self.hyperparameter_config,
             reported_metric,
-            reported_runtime
+            reported_runtime,
+            reported_mem_params,
+            reported_mem_bufs,
+            reported_mem_peak
         )
+
 
