@@ -33,11 +33,6 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
-import os, sys
-currentdir = os.path.dirname(os.path.realpath(__file__))
-parentdir = os.path.dirname(currentdir)
-sys.path.append(parentdir)
-
 from torchgpipe import GPipe
 from torchgpipe.balance import balance_by_time, balance_by_size
 from torchvision.models.resnet import ResNet
