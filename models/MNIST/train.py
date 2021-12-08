@@ -11,11 +11,6 @@ import torch.distributed as dist
 import json
 import torch.multiprocessing as mp
 
-import os, sys
-currentdir = os.path.dirname(os.path.realpath(__file__))
-parentdir = os.path.dirname(currentdir)
-sys.path.append(parentdir)
-
 from  torchgpipe import GPipe
 from torchgpipe.balance import balance_by_time
 from torchvision.models.resnet import ResNet

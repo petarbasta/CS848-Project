@@ -40,6 +40,8 @@ class ModelParallelResNet50(ResNet):
     def __init__(self, *args, **kwargs):
         super(ModelParallelResNet50, self).__init__(
             Bottleneck, resnet_layers, *args, **kwargs)
+        
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
 
         self.seq1 = nn.Sequential(
             self.conv1,
