@@ -158,7 +158,7 @@ def _build_sequential_resnet(layers: List[int],
 
     # Build ResNet as a sequential model.
     model = nn.Sequential(OrderedDict([
-        ('conv1', nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)),
+        ('conv1', nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)),
         ('bn1', nn.BatchNorm2d(64)),
         ('relu', nn.ReLU()),
         ('maxpool', nn.MaxPool2d(kernel_size=3, stride=2, padding=1)),
@@ -195,6 +195,4 @@ def _build_sequential_resnet(layers: List[int],
 
 def build_gpipe_resnet(**kwargs: Any) -> nn.Sequential:
     return _build_sequential_resnet(resnet_layers, **kwargs)
-
-
 
