@@ -1,3 +1,16 @@
+"""
+A script for training various torchvision models on MNIST data.
+This is a modified version of the MNIST training example script from the PyTorch team.
+
+Original script: https://github.com/pytorch/examples/tree/master/mnist
+Retrieval date: Dec 7, 2021
+
+python train.py --arch resnet --parallelism dp
+
+Note 1: Data Parallelism only supports single node / multiple GPU training.
+Note 2: You can specify hyperparameters using other available arguments.
+"""
+
 from __future__ import print_function
 import argparse
 import torch
@@ -11,7 +24,7 @@ import torch.distributed as dist
 import json
 import torch.multiprocessing as mp
 
-from  torchgpipe import GPipe
+from torchgpipe import GPipe
 from torchgpipe.balance import balance_by_time
 from torchvision.models.resnet import ResNet
 from parallel_models import (
@@ -25,7 +38,7 @@ from parallel_models import (
 
 assert torch.cuda.is_available(), "CUDA must be available in order to run"
 n_gpus = torch.cuda.device_count()
-assert n_gpus == 2, f"ImageNet training requires exactly 2 GPUs to run, but got {n_gpus}"
+assert n_gpus == 2, f"MNIST training requires exactly 2 GPUs to run, but got {n_gpus}"
 
 supported_model_architectures = ['resnet', 'alexnet']
 supported_parallelism_strategies = ['dp', 'mp', 'gpipe']
@@ -41,10 +54,9 @@ supported_models = {
     }
 }
 
-def train(args, model, device, train_loader, optimizer, epoch):
+def train(args, model, train_loader, optimizer, epoch):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
-        #data, target = data.to(device), target.to(device)
         
         if args.parallelism == 'dp':
             data = data.cuda(args.gpu, non_blocking=True)
@@ -55,7 +67,7 @@ def train(args, model, device, train_loader, optimizer, epoch):
         elif args.parallelism == 'gpipe':
             data = data.to(model.devices[0], non_blocking=True)
             target = target.to(model.devices[-1], non_blocking=True)
-        
+
         optimizer.zero_grad()
         output = model(data)
         loss = F.nll_loss(output, target)
@@ -69,13 +81,12 @@ def train(args, model, device, train_loader, optimizer, epoch):
                 break
 
 
-def test(model, device, test_loader, args):
+def test(model, test_loader, args):
     model.eval()
     test_loss = 0
     correct = 0
     with torch.no_grad():
         for data, target in test_loader:
-            #data, target = data.to(device), target.to(device)
             
             if args.parallelism == 'dp':
                 data = data.cuda(args.gpu, non_blocking=True)
@@ -93,10 +104,12 @@ def test(model, device, test_loader, args):
             correct += pred.eq(target.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
+    accuracy = 100. * correct / len(test_loader.dataset)
 
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
+        test_loss, correct, len(test_loader.dataset), accuracy))
+    return accuracy
+
 
 def init_args():
     # Training settings
@@ -133,18 +146,20 @@ def init_args():
     parser.add_argument('--save-model', action='store_true', default=False,
                         help='For Saving the current Model')
     args = parser.parse_args()
-    
+
+    # Initialize dp-specific config
     args.gpu = None
-    
+    args.world_size = 1
+    args.rank = 0
+    args.dist_url = 'tcp://127.0.0.1:8001'
+    args.dist_backend = 'nccl'
+
     return args
+
 
 def main():
     args = init_args()
-    
-    use_cuda = not args.no_cuda and torch.cuda.is_available()
     torch.manual_seed(args.seed)
-
-    device = torch.device("cuda" if use_cuda else "cpu")
     ngpus_per_node = torch.cuda.device_count()
 
     manager = mp.Manager()
@@ -153,9 +168,10 @@ def main():
     start_time = timer()
 
     if args.parallelism == "dp":
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, device, args, best_accuracy))
+        args.world_size = ngpus_per_node * args.world_size
+        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args, best_accuracy))
     else:
-        main_worker(args.gpu, ngpus_per_node, device, args, best_accuracy)
+        main_worker(args.gpu, ngpus_per_node, args, best_accuracy)
 
     end_time = timer()
 
@@ -163,8 +179,14 @@ def main():
     print(json.dumps(reported_stats))
 
     
-def main_worker(gpu, ngpus_per_node, device, args, best_accuracy):
+def main_worker(gpu, ngpus_per_node, args, best_accuracy):
     args.gpu = gpu
+
+    # Initialize process group
+    if args.parallelism == 'dp':
+        args.rank = args.rank * ngpus_per_node + gpu
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
+                world_size=args.world_size, rank=args.rank)
 
     train_kwargs = {'batch_size': args.batch_size}
     test_kwargs = {'batch_size': args.test_batch_size}
@@ -191,13 +213,26 @@ def main_worker(gpu, ngpus_per_node, device, args, best_accuracy):
 
     model = supported_models[args.arch][args.parallelism]()
 
+    if args.parallelism == 'gpipe':
+        partitions = torch.cuda.device_count()
+        sample = torch.rand(64, 1, 28, 28)
+        balance = balance_by_time(partitions, model, sample)
+        model = GPipe(model, balance, chunks=8)
+    elif args.parallelism =='dp':
+        torch.cuda.set_device(args.gpu)
+        model.cuda(args.gpu)
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+
     optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     for epoch in range(1, args.epochs + 1):
-        train(args, model, device, train_loader, optimizer, epoch)
-        test(model, device, test_loader, args)
+        train(args, model, train_loader, optimizer, epoch)
+        accuracy = test(model, test_loader, args)
         scheduler.step()
+
+        # Update best accuracy across all epochs
+        best_accuracy.value = max(accuracy, best_accuracy.value)
 
     #if args.save_model:
     #    torch.save(model.state_dict(), "mnist_cnn.pt")
