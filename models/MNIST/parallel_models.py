@@ -24,12 +24,43 @@ class DataParallelResNet50(ResNet):
         return super(DataParallelResNet50, self).forward(x)
 
 class DataParallelAlexNet(AlexNet):
-    def __init__(self, *args, **kwargs):
-        super(DataParallelAlexNet, self).__init__(*args, **kwargs)
-        #self.conv1 = nn.Conv2d(3, 64, kernel_size=11, stride=4, padding=2)
+    def __init__(self, num_classes: int = 1000) -> None:
+        super(DataParallelAlexNet, self).__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(1, 64, kernel_size=11, stride=4, padding=2),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(64, 192, kernel_size=5, padding=2),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(192, 384, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(384, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+        )
 
-    def forward(self, x):
-        return super(DataParallelAlexNet, self).forward(x)
+        self.avgpool = nn.AdaptiveAvgPool2d((6, 6))
+
+        self.classifier = nn.Sequential(
+            nn.Dropout(),
+            nn.Linear(256 * 6 * 6, 4096),
+            nn.ReLU(inplace=True),
+            nn.Dropout(),
+            nn.Linear(4096, 4096),
+            nn.ReLU(inplace=True),
+            nn.Linear(4096, num_classes),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
+        return x
+
 
 def build_dp_resnet():
     return DataParallelResNet50()
@@ -198,4 +229,68 @@ def build_gpipe_resnet(**kwargs: Any) -> nn.Sequential:
     return _build_sequential_resnet(resnet_layers, **kwargs)
 
 def build_gpipe_alexnet(**kwargs: Any) -> nn.Sequential:
-    return AlexNet()
+    return GPipeAlexNet()
+
+class Flatten(nn.Module):
+    def __init__(self):
+        super(Flatten, self).__init__()
+
+    def forward(self, x):
+        x = x.view(x.size(0), -1)
+        return x
+
+class GPipeAlexNet(nn.Sequential):
+    def __init__(self, num_classes: int = 1000) -> None:
+        super(GPipeAlexNet, self).__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(1, 64, kernel_size=11, stride=4, padding=2),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(64, 192, kernel_size=5, padding=2),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(192, 384, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(384, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+        )
+
+        self.avgpool = nn.AdaptiveAvgPool2d((6, 6))
+
+        self.classifier = nn.Sequential(
+            nn.Dropout(),
+            nn.Linear(256 * 6 * 6, 4096),
+            nn.ReLU(inplace=True),
+            nn.Dropout(),
+            nn.Linear(4096, 4096),
+            nn.ReLU(inplace=True),
+            nn.Linear(4096, num_classes),
+        )
+
+        self.model = nn.Sequential(*(list(self.features.children()) + [nn.AvgPool2d(1), Flatten()] + list(self.classifier.children())))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x = x.to
+        # x = self.features(x)
+        # x = x.to
+        # x = self.avgpool(x)
+        # x = torch.flatten(x, 1)
+        # x = self.classifier(x)
+        return self.model(x)
+
+#  class ALEXNET(nn.Module):
+#     def __init__(self):
+#         super(ALEXNET, self).__init__()
+
+#         # load alexnet
+#         self.model = models.alexnet(pretrained=True)   
+                        
+#     def forward(self, images):
+    
+#         images = images.cuda()  #print(images.size()) = torch.Size([64, 3, 224, 224])
+#         scores = self.model(images)
+             
+#         return scores   

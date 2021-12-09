@@ -64,8 +64,8 @@ class Trial:
         reported_metric = float(statistics_dict[self.trial_config.dnn_metric_key])
         reported_runtime = statistics_dict['runtime']
         reported_mem_params = statistics_dict['mem_params']
-        reported_mem_bufs = statistics_dict['mem_params']
-        reported_mem_peak = statistics_dict['mem_params']
+        reported_mem_bufs = statistics_dict['mem_bufs']
+        reported_mem_peak = statistics_dict['mem_peak']
 
         return TrialResult(
             self.hyperparameter_config,

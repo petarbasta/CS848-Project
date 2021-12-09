@@ -205,7 +205,7 @@ def main_worker(gpu, ngpus_per_node, args, best_accuracy, mem_params, mem_bufs, 
         test_kwargs.update(cuda_kwargs)
 
     transform=transforms.Compose([
-        transforms.Resize((227, 227)),
+        transforms.Resize((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize((0.1307,), (0.3081,))
         ])
