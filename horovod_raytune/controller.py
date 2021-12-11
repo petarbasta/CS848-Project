@@ -8,29 +8,50 @@ import logging
 import ray
 from ray import tune
 from ray.tune.integration.horovod import DistributedTrainableCreator
-from train import run_training
+from models.imagenet.train_horovod_raytune import run_horovod_raytune_imagenet_training
+from models.MNIST.train import run_horovod_raytune_mnist_training
 
 """
+Example usage for ImageNet training task:
+
 python horovod_raytune/controller.py \
+        --task imagenet \
         --data /u4/jerorseth/datasets/ILSVRC/Data/CLS-LOC \
         --arch resnet \
-        --dnn_hyperparameter_space /u4/jerorset/cs848/CS848-Project/horovod_raytune/hyperparameter_space_resnet.json \
+        --dnn_hyperparameter_space /u4/jerorset/cs848/CS848-Project/imagenet/hyperparameter_space_ImageNet.json \
+        --dnn_metric_key accuracy \
+        --dnn_metric_objective max
+
+
+Example usage for MNIST training task:
+
+python horovod_raytune/controller.py \
+        --task mnist \
+        --arch resnet \
+        --dnn_hyperparameter_space /u4/jerorset/cs848/CS848-Project/MNIST/hyperparameter_space_MNIST.json \
         --dnn_metric_key accuracy \
         --dnn_metric_objective max
 """
 
-supported_model_architectures = ['resnet']
+supported_tasks = ['imagenet', 'mnist']
+supported_model_architectures = ['resnet', 'alexnet']
 
 
 def init_args():
-    parser = argparse.ArgumentParser(description='Horovod+RayTune PyTorch ImageNet Training')
-    parser.add_argument('-d', '--data', metavar='DIR',
-                        help='path to dataset')
-    parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet',
+    parser = argparse.ArgumentParser(description='Horovod+RayTune PyTorch Training')
+    parser.add_argument('-d', '--data', metavar='DIR', required=False, help='path to dataset (imagenet only)')
+    parser.add_argument('-t', '--task', metavar='TASK', default=supported_tasks[0], required=True,
+                        choices=supported_tasks,
+                        help=f"training task: {' | '.join(supported_tasks)} (default: {supported_tasks[0]})")
+    parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet', required=True,
                         choices=supported_model_architectures,
                         help='model architecture: ' +
                             ' | '.join(supported_model_architectures) +
                             ' (default: resnet)')
+    parser.add_argument('--epochs', type=int, default=1, metavar='N',
+                        help='number of epochs to train (default: 1)')
+    parser.add_argument('--dry-run', action='store_true', default=False,
+                        help='quickly check a single pass (mnist only)')
     #parser.add_argument('--username', required=True, type=str, help='Username for SSH to remote machines')
     #parser.add_argument('--password', required=False, type=str, help='Password for SSH to remote machines')
     #parser.add_argument('--machines', required=True, nargs='+', help='All remote machines to utilize')
@@ -70,16 +91,21 @@ def main():
     logger.addHandler(log_handler)
     """
 
+    if args.task == 'imagenet':
+        train_executable = tune.with_parameters(run_horovod_raytune_imagenet_training,
+            data=args.data, arch=args.arch, epochs=args.epochs)
+    elif args.task == 'mnist':
+        train_executable = tune.with_parameters(run_horovod_raytune_mnist_training,
+            arch=args.arch, epochs=args.epochs, dry_run=args.dry_run)
+
     trainable = DistributedTrainableCreator(
-            tune.with_parameters(run_training, data=args.data, arch=args.arch),
+            train_executable,
             num_cpus_per_slot=1, # 1 CPU for each Ray worker
             num_hosts=1, # Each trial runs on 1 machine
             num_slots=2, # Each trial will employ 2 workers (GPUs)
             use_gpu=True)
-    # TODO: More arguments can be specified, see https://docs.ray.io/en/latest/tune/api_docs/execution.html
-    # Run grid search (which is the default optimization strategy)
-    print(hyperparameter_space_dict)
 
+    # Run grid search (which is the default optimization strategy)
     ray.init(address='auto')
     analysis = tune.run(
             trainable,
@@ -93,6 +119,7 @@ def main():
                 syncer=None # Disable syncing when all nodes share filesystem
             ))
 
+    # Print final results
     print(analysis.best_config)
 
 

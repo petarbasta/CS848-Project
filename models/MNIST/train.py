@@ -24,32 +24,34 @@ import torch.distributed as dist
 import json
 import torch.multiprocessing as mp
 
+# TODO: These might be able to be imported conditionally
+import horovod.torch as hvd
+from ray import tune
+
 from torchgpipe import GPipe
 from torchgpipe.balance import balance_by_time
-from torchvision.models.resnet import ResNet
 from parallel_models import (
     build_dp_resnet,
     build_mp_resnet,
     build_gpipe_resnet,
     build_dp_alexnet,
     build_mp_alexnet,
-    build_gpipe_alexnet
-)      
-
-
-assert torch.cuda.is_available(), "CUDA must be available in order to run"
-n_gpus = torch.cuda.device_count()
-assert n_gpus == 2, f"MNIST training requires exactly 2 GPUs to run, but got {n_gpus}"
+    build_gpipe_alexnet,
+    build_horovod_raytune_resnet,
+    build_horovod_raytune_alexnet
+)
 
 supported_model_architectures = ['resnet', 'alexnet']
 supported_parallelism_strategies = ['dp', 'mp', 'gpipe']
 supported_models = {
     'resnet': {
+        'horovod_raytune': build_horovod_raytune_resnet,
         'dp': build_dp_resnet,
         'mp': build_mp_resnet,
         'gpipe': build_gpipe_resnet,
     },
     'alexnet': {
+        'horovod_raytune': build_horovod_raytune_alexnet,
         'dp': build_dp_alexnet,
         'mp': build_mp_alexnet,
         'gpipe': build_gpipe_alexnet
@@ -113,7 +115,7 @@ def test(model, test_loader, args):
     return accuracy
 
 
-def init_args():
+def init_hypertune_args():
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
     
@@ -137,16 +139,16 @@ def init_args():
                         help='learning rate (default: 1.0)')
     parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
                         help='Learning rate step gamma (default: 0.7)')
-    parser.add_argument('--no-cuda', action='store_true', default=False,
-                        help='disables CUDA training')
+    # parser.add_argument('--no-cuda', action='store_true', default=False,
+    #                     help='disables CUDA training')
     parser.add_argument('--dry-run', action='store_true', default=False,
                         help='quickly check a single pass')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
-    parser.add_argument('--save-model', action='store_true', default=False,
-                        help='For Saving the current Model')
+    # parser.add_argument('--save-model', action='store_true', default=False,
+    #                     help='For Saving the current Model')
     args = parser.parse_args()
 
     # Initialize dp-specific config
@@ -159,10 +161,66 @@ def init_args():
     return args
 
 
-def main():
-    args = init_args()
+def init_horovod_raytune_args(config, arch, epochs, dry_run):
+    def get_arg(key, default_val):
+        return config[key] if key in config else default_val
+    
+    args = type('', (), {})()
+    args.parallelism = 'horovod_raytune'
+    args.arch = arch
+
+    # Hyperparameters are provided via config
+    args.batch_size = get_arg('batch-size', 64)
+    args.test_batch_size = get_arg('test-batch-size', 1000)
+    args.lr = get_arg('lr', 1.0)
+    args.gamma = get_arg('gamma', 0.7)
+
+    # Regular args are passed to this init function
+    args.epochs = epochs
+    args.dry_run = dry_run
+
+    # TODO: Either pass args for these args, or remove them from the script entirely
+    args.log_interval = 10
+    args.seed = 1
+
+    return args
+
+
+def run_horovod_raytune_mnist_training(config, checkpoint_dir=None, arch=None, epochs=None, dry_run=None):
+    assert torch.cuda.is_available(), "CUDA must be available in order to run"
+    n_gpus = torch.cuda.device_count()
+    assert n_gpus == 2, f"Horovod RayTune MNIST training requires exactly 2 GPUs to run, but got {n_gpus}"
+
+    assert arch is not None, "arch is not specified"
+    assert arch is not None, "epochs is not specified"
+    assert dry_run is not None, "dry_run is not specified"
+
+    hvd.init()
+
+    # Pin GPU to be used to process local rank (one GPU per process)
+    torch.cuda.set_device(hvd.local_rank())
+
+    args = init_horovod_raytune_args(config, arch, epochs, dry_run)
+    main(args)
+
+
+def run_hypertune_mnist_training():
+    assert torch.cuda.is_available(), "CUDA must be available in order to run"
+    n_gpus = torch.cuda.device_count()
+    assert n_gpus == 2, f"HyperTune MNIST training requires exactly 2 GPUs to run, but got {n_gpus}"
+
+    args = init_hypertune_args()
+    main(args)
+
+
+def main(args):
     torch.manual_seed(args.seed)
     ngpus_per_node = torch.cuda.device_count()
+
+    # Running Horovod+RayTune should bypass our manual parallel configuration that follows
+    if args.parallelism == 'horovod_raytune':
+        main_worker(args.gpu, ngpus_per_node, args, None, None, None, None)
+        return
 
     manager = mp.Manager()
     best_accuracy = manager.Value('d', 0)
@@ -180,7 +238,12 @@ def main():
 
     end_time = timer()
 
-    reported_stats = {'accuracy': best_accuracy.value, 'runtime': end_time - start_time, 'mem_params': mem_params.value, 'mem_bufs': mem_bufs.value, 'mem_peak': mem_peak.value }
+    reported_stats = {
+        'accuracy': best_accuracy.value,
+        'runtime': end_time - start_time,
+        'mem_params': mem_params.value,
+        'mem_bufs': mem_bufs.value,
+        'mem_peak': mem_peak.value }
     print(json.dumps(reported_stats))
 
     
@@ -238,15 +301,20 @@ def main_worker(gpu, ngpus_per_node, args, best_accuracy, mem_params, mem_bufs, 
         scheduler.step()
 
         # Update best accuracy across all epochs
-        best_accuracy.value = max(accuracy, best_accuracy.value)
+        if args.parallelism == 'horovod_raytune':
+            tune.report(accuracy=accuracy, rank=hvd.rank())
+        else:
+            best_accuracy.value = max(accuracy, best_accuracy.value)
 
-    mem_params.value = sum([param.nelement()*param.element_size() for param in model.parameters()])
-    mem_bufs.value = sum([buf.nelement()*buf.element_size() for buf in model.buffers()])
-    mem_peak.value = torch.cuda.max_memory_allocated()
+    if args.parallelism != 'horovod_raytune':
+        mem_params.value = sum([param.nelement()*param.element_size() for param in model.parameters()])
+        mem_bufs.value = sum([buf.nelement()*buf.element_size() for buf in model.buffers()])
+        mem_peak.value = torch.cuda.max_memory_allocated()
     #if args.save_model:
     #    torch.save(model.state_dict(), "mnist_cnn.pt")
 
 
+# When this script is run on its own, assume HyperTune training
 if __name__ == '__main__':
-    main()
+    run_hypertune_mnist_training()
 

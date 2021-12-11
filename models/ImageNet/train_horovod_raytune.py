@@ -44,7 +44,7 @@ import torchvision.datasets as datasets
 
 import horovod.torch as hvd
 from ray import tune
-from custom_models import build_horovod_raytune_resnet
+from parallel_models import build_horovod_raytune_resnet
 
 #assert torch.cuda.is_available(), "CUDA must be available in order to run"
 #n_gpus = torch.cuda.device_count()
@@ -69,7 +69,7 @@ supported_models = {
 
 
 
-def init_args(config, data, arch):
+def init_args(config, data, arch, epochs):
     def get_arg(key, default_val):
         return config[key] if key in config else default_val
 
@@ -79,9 +79,9 @@ def init_args(config, data, arch):
     args = type('', (), {})()
     args.data = data
     args.arch = arch
+    args.epochs = epochs
     
     args.workers = get_arg('workers', 4)
-    args.epochs = get_arg('epochs', 90)
     args.batch_size = get_arg('batch-size', 256)
     args.lr = get_arg('lr', 0.1)
     args.momentum = get_arg('momentum', 0.9)
@@ -108,13 +108,14 @@ def init_args(config, data, arch):
     return args
 
 
-def run_training(config, checkpoint_dir=None, data=None, arch=None):
+def run_horovod_raytune_imagenet_training(config, checkpoint_dir=None, data=None, arch=None, epochs=None):
     assert torch.cuda.is_available(), "CUDA must be available in order to run"
     n_gpus = torch.cuda.device_count()
     assert n_gpus == 2, f"ImageNet training requires exactly 2 GPUs to run, but got {n_gpus}"
 
-    assert data is not None, "Dataset path is not specified"
-    assert arch is not None, "Architecture is not specified"
+    assert data is not None, "data is not specified"
+    assert arch is not None, "arch is not specified"
+    assert epochs is not None, "epochs is not specified"
 
     hvd.init()
     #hvd.allreduce()
@@ -122,15 +123,8 @@ def run_training(config, checkpoint_dir=None, data=None, arch=None):
     # Pin GPU to be used to process local rank (one GPU per process)
     torch.cuda.set_device(hvd.local_rank())
 
-    args = init_args(config, data, arch)
+    args = init_args(config, data, arch, epochs)
     main(args)
-
-    """
-    for i in range(config["epochs"]):
-        time.sleep(1)
-        model = Model(learning_rate=config["lr"])
-        tune.report(test=1, rank=hvd.rank())
-    """
 
 
 def main(args):
