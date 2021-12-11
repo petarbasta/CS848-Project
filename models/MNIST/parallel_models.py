@@ -62,11 +62,17 @@ class BasicAlexNet(AlexNet):
         return x
 
 
+def build_basic_resnet():
+    return BasicResNet50()
+
 def build_dp_resnet():
     return BasicResNet50()
 
 def build_horovod_raytune_resnet():
     return BasicResNet50()
+
+def build_basic_alexnet():
+    return BasicAlexNet()
 
 def build_dp_alexnet():
     return BasicAlexNet()
