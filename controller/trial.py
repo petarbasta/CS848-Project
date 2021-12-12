@@ -53,7 +53,10 @@ class Trial:
         stdin, stdout, stderr = ssh_client.exec_command(self.full_cmd)
         output_lines = stdout.readlines()
         self.logger.debug(f"Received output from {self.machine}: {output_lines}")
-        
+       
+        output_errors = stderr.readlines()
+        self.logger.debug(f"Received error from {self.machine}: {output_errors}")
+ 
         ssh_client.close()
         self.logger.debug(f"SSH connection with {self.machine} has been closed")
 
