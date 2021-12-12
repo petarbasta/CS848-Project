@@ -113,7 +113,7 @@ echo =============================
 echo "Starting DNN training job..."
 
 if [ "$dataset_task" == "imagenet" ]; then
-		nohup python -u $train_path \
+		HOROVOD_START_TIMEOUT=600 nohup python -u $train_path \
 				--data $data_path \
 				--arch $dnn_model \
 				--epochs 1 \
@@ -122,7 +122,7 @@ if [ "$dataset_task" == "imagenet" ]; then
 				--dnn_metric_objective max \
 				> $log_path 2>&1 &
 elif [ "$dataset_task" == "mnist" ]; then
-		nohup python -u $train_path \
+		HOROVOD_START_TIMEOUT=600 nohup python -u $train_path \
 				--arch $dnn_model \
 				--epochs 1 \
 				--dnn_hyperparameter_space $hyp_cfg_path \
