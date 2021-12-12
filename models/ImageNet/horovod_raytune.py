@@ -61,6 +61,7 @@ def main():
             #num_cpus_per_slot=1, # 1 CPU for each Ray worker
             num_hosts=1, # Each trial runs on 1 machine
             num_slots=2, # Each trial will employ 2 workers (GPUs)
+            timeout_s=300,
             use_gpu=True)
 
     # Run grid search (which is the default optimization strategy)
