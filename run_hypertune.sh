@@ -20,7 +20,7 @@ check_file_exists() {
 }
 
 
-echo Welcome to HyperTune ImageNet Runner!
+echo Welcome to HyperTune Runner!
 echo
 echo =============================
 echo "[1/4] Specify parameters"
@@ -40,6 +40,9 @@ read dnn_model
 echo -n "DNN parallelization strategy (dp, mp, or gpipe): "
 read dnn_strategy
 
+echo -n "DNN dataset / task (imagenet or mnist): "
+read dataset_task
+
 venv_path=$(read_path "virtual environment")
 check_dir_exists $venv_path
 
@@ -53,7 +56,7 @@ hyp_cfg_path=$(read_path "DNN hyperparameter space config (.json)")
 check_file_exists $hyp_cfg_path
 
 cur_date=$(date '+%FT%H%M%S')
-log_path=./logs/run_imagenet_${dnn_model}_${dnn_strategy}_${cur_date}.log
+log_path=./logs/run_${dataset_task}_${dnn_model}_${dnn_strategy}_${cur_date}.log
 
 
 # Run controller
