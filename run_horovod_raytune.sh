@@ -30,7 +30,9 @@ echo NOTE: You must run this script on the head node of your Ray
 echo cluster, and fill in details of your machine in ray_cluster.yaml.
 echo This script will start a new Ray cluster, but will not tear it
 echo down. Please monitor progress and tear down manually upon
-echo completion.
+echo completion, using the following command:
+echo
+echo "    ray stop && ray down ray_cluster.yaml"
 echo
 echo =============================
 echo "[1/4] Specify parameters"
@@ -96,15 +98,15 @@ echo =============================
 echo "[3/4] Launch Ray Cluster"
 echo =============================
 
-echo Tearing down any current Ray cluster or nodes...
+echo Tearing down any current Ray cluster or nodes, please follow any prompts...
 ray stop && ray down ray_cluster.yaml
 echo Done!
 
-echo Starting up a new Ray cluster...
-ray up ray_cluster.yaml
+echo Starting up a new Ray cluster, please follow the prompts...
+ray up ray_cluster.yaml --no-config-cache
 echo Done!
 
-
+echo
 echo =============================
 echo "[4/4] Run DNN Training"
 echo =============================
@@ -115,7 +117,7 @@ if [ "$dataset_task" == "imagenet" ]; then
 				--data $data_path \
 				--arch $dnn_model \
 				--epochs 1 \
-				--dnn_hyperparameter_space $hyp_cfg_path
+				--dnn_hyperparameter_space $hyp_cfg_path \
 				--dnn_metric_key accuracy \
 				--dnn_metric_objective max \
 				> $log_path 2>&1 &
@@ -123,7 +125,7 @@ elif [ "$dataset_task" == "mnist" ]; then
 		nohup python -u $train_path \
 				--arch $dnn_model \
 				--epochs 1 \
-				--dnn_hyperparameter_space $hyp_cfg_path
+				--dnn_hyperparameter_space $hyp_cfg_path \
 				--dnn_metric_key accuracy \
 				--dnn_metric_objective max \
 				> $log_path 2>&1 &
@@ -137,6 +139,6 @@ deactivate
 echo Your training job has been started!
 echo Please remember to monitor progress using the log file, and tear down your Ray cluster when finished.
 echo Use this command to quickly print your log:
-echo     cat $log_path
+echo "    cat $log_path"
 echo Exiting...
 
