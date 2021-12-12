@@ -13,7 +13,6 @@ Note 2: You can specify hyperparameters using other available arguments.
 
 from __future__ import print_function
 import argparse
-from models.MNIST.parallel_models import build_basic_alexnet, build_basic_resnet
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -39,7 +38,9 @@ from parallel_models import (
     build_mp_alexnet,
     build_gpipe_alexnet,
     build_horovod_raytune_resnet,
-    build_horovod_raytune_alexnet
+    build_horovod_raytune_alexnet,
+    build_basic_alexnet,
+    build_basic_resnet
 )
 
 supported_model_architectures = ['resnet', 'alexnet']
@@ -189,6 +190,7 @@ def init_horovod_raytune_args(config, arch, epochs, dry_run):
     # TODO: Either pass args for these args, or remove them from the script entirely
     args.log_interval = 10
     args.seed = 1
+    args.gpu = None
 
     return args
 
@@ -280,9 +282,9 @@ def main_worker(gpu, ngpus_per_node, args, best_accuracy, mem_params, mem_bufs, 
         transforms.Normalize((0.1307,), (0.3081,))
         ])
 
-    dataset1 = datasets.MNIST('../data', train=True, download=True,
+    dataset1 = datasets.MNIST('./data', train=True, download=True,
                        transform=transform)
-    dataset2 = datasets.MNIST('../data', train=False,
+    dataset2 = datasets.MNIST('./data', train=False,
                        transform=transform)
 
     # TODO: This could be refactored to use DistributedSampler
@@ -330,9 +332,9 @@ def main_worker(gpu, ngpus_per_node, args, best_accuracy, mem_params, mem_bufs, 
         mem_params.value = sum([param.nelement()*param.element_size() for param in model.parameters()])
         mem_bufs.value = sum([buf.nelement()*buf.element_size() for buf in model.buffers()])
 
-    # TODO: Not sure whether this will work when no GPUs are found, checking to be safe
-    if args.parallelism != 'none':
-        mem_peak.value = torch.cuda.max_memory_allocated()
+        # TODO: Not sure whether this will work when no GPUs are found, checking to be safe
+        if args.parallelism != 'none':
+            mem_peak.value = torch.cuda.max_memory_allocated()
 
     #if args.save_model:
     #    torch.save(model.state_dict(), "mnist_cnn.pt")
