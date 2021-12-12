@@ -227,11 +227,6 @@ def main(args):
     torch.manual_seed(args.seed)
     ngpus_per_node = torch.cuda.device_count()
 
-    # Bypass the manual cuda configuration that follows
-    if args.parallelism == 'horovod_raytune':
-        main_worker(args.gpu, ngpus_per_node, args, None, None, None, None)
-        return
-
     manager = mp.Manager()
     best_accuracy = manager.Value('d', 0)
     mem_params = manager.Value('d', 0)
@@ -254,6 +249,16 @@ def main(args):
         'mem_params': mem_params.value,
         'mem_bufs': mem_bufs.value,
         'mem_peak': mem_peak.value }
+    
+    if args.parallelism == 'horovod_raytune':
+        tune.report(
+            accuracy=reported_stats['accuracy'],
+            runtime=reported_stats['runtime'],
+            mem_peak=reported_stats['mem_peak'],
+            mem_params=reported_stats['mem_params'],
+            mem_bufs=reported_stats['mem_bufs'],
+            rank=hvd.rank())
+    
     print(json.dumps(reported_stats))
 
     
@@ -322,19 +327,14 @@ def main_worker(gpu, ngpus_per_node, args, best_accuracy, mem_params, mem_bufs, 
         accuracy = test(model, test_loader, args)
         scheduler.step()
 
-        # Update best accuracy across all epochs
-        if args.parallelism == 'horovod_raytune':
-            tune.report(accuracy=accuracy, rank=hvd.rank())
-        else:
-            best_accuracy.value = max(accuracy, best_accuracy.value)
+        best_accuracy.value = max(accuracy, best_accuracy.value)
 
-    if args.parallelism != 'horovod_raytune':
-        mem_params.value = sum([param.nelement()*param.element_size() for param in model.parameters()])
-        mem_bufs.value = sum([buf.nelement()*buf.element_size() for buf in model.buffers()])
+    mem_params.value = sum([param.nelement()*param.element_size() for param in model.parameters()])
+    mem_bufs.value = sum([buf.nelement()*buf.element_size() for buf in model.buffers()])
 
-        # TODO: Not sure whether this will work when no GPUs are found, checking to be safe
-        if args.parallelism != 'none':
-            mem_peak.value = torch.cuda.max_memory_allocated()
+    # TODO: Not sure whether this will work when no GPUs are found, checking to be safe
+    if args.parallelism != 'none':
+        mem_peak.value = torch.cuda.max_memory_allocated()
 
     #if args.save_model:
     #    torch.save(model.state_dict(), "mnist_cnn.pt")

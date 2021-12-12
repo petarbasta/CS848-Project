@@ -147,12 +147,18 @@ def main(args):
         args.world_size = int(os.environ["WORLD_SIZE"])
 
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
+    """
+
     ngpus_per_node = torch.cuda.device_count()
 
     manager = mp.Manager()
     best_accuracy = manager.Value('d', 0)
+    mem_params = manager.Value('d', 0)
+    mem_bufs = manager.Value('d', 0)
+    mem_peak = manager.Value('d', 0)
 
     start_time = timer()
+    """
     if args.multiprocessing_distributed:
         # Since we have ngpus_per_node processes per node, the total world_size
         # needs to be adjusted accordingly
@@ -163,15 +169,30 @@ def main(args):
     else:
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args, best_accuracy)
+    """
+    main_worker(args, best_accuracy, mem_params, mem_bufs, mem_peak)
     end_time = timer()
 
     # After workers have completed, output statistics
-    reported_stats = {'accuracy': best_accuracy.value, 'runtime': end_time - start_time}
-    print(json.dumps(reported_stats))
-    """
-    main_worker(args)
+    reported_stats = {
+        'accuracy': best_accuracy.value,
+        'runtime': end_time - start_time,
+        'mem_params': mem_params.value,
+        'mem_bufs': mem_bufs.value,
+        'mem_peak': mem_peak.value }
 
-def main_worker(args):
+    tune.report(
+        accuracy=reported_stats['accuracy'],
+        runtime=reported_stats['runtime'],
+        mem_peak=reported_stats['mem_peak'],
+        mem_params=reported_stats['mem_params'],
+        mem_bufs=reported_stats['mem_bufs'],
+        rank=hvd.rank())
+
+    print(json.dumps(reported_stats))
+
+
+def main_worker(args, best_accuracy, mem_params, mem_bufs, mem_peak):
     """
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
@@ -338,21 +359,12 @@ def main_worker(args):
         # remember best acc@1 and save checkpoint
         accuracy_num = acc1.item() if torch.is_tensor(acc1) else float(acc1)
         # is_best = accuracy_num > best_accuracy.value
-        #best_accuracy.value = max(accuracy_num, best_accuracy.value)
+        best_accuracy.value = max(accuracy_num, best_accuracy.value)
 
-        tune.report(accuracy=accuracy_num, rank=hvd.rank())
+    mem_params.value = sum([param.nelement()*param.element_size() for param in model.parameters()])
+    mem_bufs.value = sum([buf.nelement()*buf.element_size() for buf in model.buffers()])
+    mem_peak.value = torch.cuda.max_memory_allocated()
 
-        """
-        if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                and args.rank % ngpus_per_node == 0):
-            save_checkpoint({
-                'epoch': epoch + 1,
-                'arch': args.arch,
-                'state_dict': model.state_dict(),
-                'best_acc1': best_acc1,
-                'optimizer' : optimizer.state_dict(),
-            }, is_best)
-        """
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
     batch_time = AverageMeter('Time', ':6.3f')
