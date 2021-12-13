@@ -102,7 +102,7 @@ if [ "$dataset_task" == "imagenet" ]; then
 				--venv $venv_path \
 				--dnn $train_path  \
 				--dnn_hyperparameter_space $hyp_cfg_path \
-				--data $dataset_task \
+				--data $data_path \
 				--arch $dnn_model \
 				--parallelism $dnn_strategy \
 				--epochs 1 \
