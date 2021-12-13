@@ -49,25 +49,34 @@ check_dir_exists $venv_path
 train_path=$(read_path "DNN training file (.py)")
 check_file_exists $train_path
 
-train_cfg_path=$(read_path "DNN training file args config (.json)")
-check_file_exists $train_cfg_path
-
 hyp_cfg_path=$(read_path "DNN hyperparameter space config (.json)")
 check_file_exists $hyp_cfg_path
+
+if [ "$dataset_task" == "imagenet" ]; then
+		data_path=$(read_path "ImageNet data (CLS-LOC folder)")
+		check_dir_exists $data_path
+fi
 
 cur_date=$(date '+%FT%H%M%S')
 log_path=./logs/run_${dataset_task}_${dnn_model}_${dnn_strategy}_${cur_date}.log
 
 
-# Run controller
 echo
 echo =============================
 echo "[2/4] Controller Summary"
 echo =============================
 echo "Virtual environment path:              $venv_path"
+echo "DNN dataset / task:                    $dataset_task"
+echo "DNN model / architecture:              $dnn_model"
+echo "DNN parallel training strategy:        $dnn_strategy"
 echo "DNN training file:                     $train_path"
-echo "DNN training config file:              $train_cfg_path"
 echo "DNN hyperparameter space config file:  $hyp_cfg_path"
+echo "Number of DNN training epochs:         1"
+
+if [ "$dataset_task" == "imagenet" ]; then
+		echo "ImageNet data folder:                  $data_path"
+fi
+
 echo "stdout will be logged to:              $log_path"
 echo
 
@@ -85,19 +94,41 @@ echo "[3/4] Starting Controller..."
 # Activate venv
 source venv/bin/activate
 
+
 # Run controller
-nohup python -u controller/controller.py \
-        --venv $venv_path \
-        --dnn $train_path  \
-        --dnn_hyperparameter_space $hyp_cfg_path \
-        --dnn_train_args $train_cfg_path \
-        --dnn_metric_key accuracy \
-        --dnn_metric_objective max \
-        --username $username \
-	--password $password \
-	--debug \
-        --machines gpu1 gpu2 gpu3 \
-        > $log_path 2>&1 &
+if [ "$dataset_task" == "imagenet" ]; then
+		# ImageNet task must pass path to ImageNet dataset
+		nohup python -u controller/controller.py \
+				--venv $venv_path \
+				--dnn $train_path  \
+				--dnn_hyperparameter_space $hyp_cfg_path \
+				--data $dataset_task \
+				--arch $dnn_model \
+				--parallelism $dnn_strategy \
+				--epochs 1 \
+				--dnn_metric_key accuracy \
+				--dnn_metric_objective max \
+				--username $username \
+				--password $password \
+				--debug \
+				--machines gpu1 gpu2 gpu3 \
+				> $log_path 2>&1 &
+else
+		nohup python -u controller/controller.py \
+				--venv $venv_path \
+				--dnn $train_path  \
+				--dnn_hyperparameter_space $hyp_cfg_path \
+				--arch $dnn_model \
+				--parallelism $dnn_strategy \
+				--epochs 1 \
+				--dnn_metric_key accuracy \
+				--dnn_metric_objective max \
+				--username $username \
+				--password $password \
+				--debug \
+				--machines gpu1 gpu2 gpu3 \
+				> $log_path 2>&1 &
+fi
 
 # Deactivate venv
 deactivate

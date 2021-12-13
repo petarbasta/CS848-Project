@@ -77,6 +77,12 @@ echo "DNN dataset / task:                    $dataset_task"
 echo "DNN model / architecture:              $dnn_model"
 echo "DNN training file:                     $train_path"
 echo "DNN hyperparameter space config file:  $hyp_cfg_path"
+echo "Number of DNN training epochs:         1"
+
+if [ "$dataset_task" == "imagenet" ]; then
+		echo "ImageNet data folder:                  $data_path"
+fi
+
 echo "Ray cluster config file:               $ray_cluster_yaml_path"
 echo "stdout will be logged to:              $log_path"
 echo
