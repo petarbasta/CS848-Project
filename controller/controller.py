@@ -37,7 +37,6 @@ def init_args():
     parser.add_argument('--dnn', required=True, type=str, help='The Python file containing the PyTorch DNN training job')
     parser.add_argument('--dnn_hyperparameter_space', required=True, type=str, help='The JSON file defining the DNN hyperparameter space')
     parser.add_argument('--data', required=False, help='path to dataset (if applicable)')
-    parser.add_argument('--dnn_metric_objective', required=True, choices=['max', 'min'], help='Whether to maximize or minimize the metric')
     parser.add_argument('--arch', default='resnet', choices=supported_model_architectures,
         help=f"model architecture: {' | '.join(supported_model_architectures)} (default: resnet)")
     parser.add_argument('--parallelism', default='dp', choices=supported_parallelism_strategies,
