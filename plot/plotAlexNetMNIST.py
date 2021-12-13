@@ -15,11 +15,11 @@ def plot_trial_results(all_trial_results, num_trials, metric_key, units=None):
 
     y_label = metric_key if units is None else f"{metric_key} ({units})"
     plt.xlabel("Trial")
-    plt.ylabel("Peak Memory (Gigabytes)")
-    plt.title(f"MNIST Alexnet peak memory by trial and parallelization strategy".capitalize())
+    plt.ylabel("Runtime (s)")
+    plt.title(f"MNIST Alexnet runtime by trial and parallelization strategy".capitalize())
 
     plt.xticks(ind + width / 2, (f"T{i}" for i in range(num_trials)))
-    plt.legend(loc='upper right')
+    plt.legend(loc='lower right')
     plt.show()
 
 
@@ -65,6 +65,18 @@ def main():
             {"runtime": 61.56561255082488, "mem_params": 244341408, "mem_bufs": 0, "mem_peak": 3343360512/1073741824},
             {"runtime": 60.24541654996574, "mem_params": 244341408, "mem_bufs": 0, "mem_peak": 3343360512/1073741824}
         ],
+        'Horovod + Ray Tune': [
+            {"runtime":  97.3423 , "mem_peak":  3233902592/1073741824 },
+            {"runtime":  97.266  , "mem_peak":  3233902592/1073741824 },
+            {"runtime":  97.2807 , "mem_peak":  3233902592/1073741824 },
+            {"runtime":  66.3573 , "mem_peak":  3233257472/1073741824 },
+            {"runtime":  65.9218 , "mem_peak":  3233257472/1073741824 },
+            {"runtime":  66.6642 , "mem_peak":  3233257472/1073741824 },
+            {"runtime":  66.0314 , "mem_peak":  3233280000/1073741824 },
+            {"runtime":  68.2389 , "mem_peak":  3233257472/1073741824 },
+            {"runtime":  65.7218 , "mem_peak":  3232670208/1073741824 },
+
+        ]
         # 'GPipe': [
         #     {},
         #     {},
@@ -78,7 +90,7 @@ def main():
         #    ]
 
     }
-    plot_trial_results(all_trial_results, num_trials, 'mem_peak', 's')
+    plot_trial_results(all_trial_results, num_trials, 'runtime', 's')
 
     # Not particularly meaningful
     #plot_trial_results(all_trial_results, num_trials, 'accuracy', '%')
