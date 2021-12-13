@@ -48,7 +48,7 @@ assert torch.cuda.is_available(), "CUDA must be available in order to run"
 n_gpus = torch.cuda.device_count()
 assert n_gpus == 2, "ImageNet training requires exactly 2 GPUs to run, but got {n_gpus}"
 
-supported_model_architectures = ['resnet']
+supported_model_architectures = ['resnet', 'alexnet']
 supported_parallelism_strategies = ['dp', 'mp', 'gpipe']
 supported_models = {
     'resnet': {

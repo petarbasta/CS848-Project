@@ -13,13 +13,20 @@ from getpass import getpass
 python controller.py \
         --venv /u4/jerorset/cs848/CS848-Project/venv \
         --dnn /u4/jerorset/cs848/CS848-Project/models/ImageNet/train.py  \
-        --dnn_hyperparameter_space /u4/jerorset/cs848/CS848-Project/models/ImageNet/hyperparameter_space_resnet.json \
-        --dnn_train_args /u4/jerorset/cs848/CS848-Project/models/ImageNet/train_args_mp_resnet.json \
+        --dnn_hyperparameter_space /u4/jerorset/cs848/CS848-Project/models/ImageNet/hyperparameter_space_ImageNet.json \
+        --data /u4/jerorseth/datasets/ILSVRC/Data/CLS-LOC \
+        --arch resnet \
+        --parallelism mp \
+        --epochs 1 \
         --dnn_metric_key accuracy \
         --dnn_metric_objective max \
         --username jerorset \
         --machines gpu1 gpu2 gpu3
 """
+
+supported_model_architectures = ['resnet', 'alexnet']
+supported_parallelism_strategies = ['dp', 'mp', 'gpipe']
+
 
 def init_args():
     parser = argparse.ArgumentParser()
@@ -29,7 +36,13 @@ def init_args():
     parser.add_argument('--venv', required=True, type=str, help='The venv directory')
     parser.add_argument('--dnn', required=True, type=str, help='The Python file containing the PyTorch DNN training job')
     parser.add_argument('--dnn_hyperparameter_space', required=True, type=str, help='The JSON file defining the DNN hyperparameter space')
-    parser.add_argument('--dnn_train_args', required=True, type=str, help='The JSON file defining arguments to pass to DNN training script')
+    parser.add_argument('--data', required=False, help='path to dataset (if applicable)')
+    parser.add_argument('--dnn_metric_objective', required=True, choices=['max', 'min'], help='Whether to maximize or minimize the metric')
+    parser.add_argument('--arch', default='resnet', choices=supported_model_architectures,
+        help=f"model architecture: {' | '.join(supported_model_architectures)} (default: resnet)")
+    parser.add_argument('--parallelism', default='dp', choices=supported_parallelism_strategies,
+        help=f"training parallelism strategy: {' | '.join(supported_parallelism_strategies)} (default: dp)")
+    parser.add_argument('--epochs', default=1, type=int, help='number of total epochs to run')
     parser.add_argument('--dnn_metric_key', required=True, type=str, help='The key for the relevant metric to extract from DNN JSON output')
     parser.add_argument('--dnn_metric_objective', required=True, choices=['max', 'min'], help='Whether to maximize or minimize the metric')
     parser.add_argument('--debug', help="Print all debugging statements", action="store_const",
