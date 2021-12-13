@@ -48,7 +48,7 @@ assert torch.cuda.is_available(), "CUDA must be available in order to run"
 n_gpus = torch.cuda.device_count()
 assert n_gpus == 2, "ImageNet training requires exactly 2 GPUs to run, but got {n_gpus}"
 
-supported_model_architectures = ['resnet']
+supported_model_architectures = ['resnet', 'alexnet']
 supported_parallelism_strategies = ['dp', 'mp', 'gpipe']
 supported_models = {
     'resnet': {
@@ -161,6 +161,9 @@ def main():
     
     manager = mp.Manager()
     best_accuracy = manager.Value('d', 0)
+    mem_params = manager.Value('d', 0)
+    mem_bufs = manager.Value('d', 0)
+    mem_peak = manager.Value('d', 0)
 
     start_time = timer()
     if args.multiprocessing_distributed:
@@ -169,18 +172,24 @@ def main():
         args.world_size = ngpus_per_node * args.world_size
         # Use torch.multiprocessing.spawn to launch distributed processes: the
         # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args, best_accuracy))
+        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args, best_accuracy, mem_params, mem_bufs, mem_peak))
     else:
         # Simply call main_worker function
-        main_worker(args.gpu, ngpus_per_node, args, best_accuracy)
+        main_worker(args.gpu, ngpus_per_node, args, best_accuracy, mem_params, mem_bufs, mem_peak)
     end_time = timer()
 
     # After workers have completed, output statistics
-    reported_stats = {'accuracy': best_accuracy.value, 'runtime': end_time - start_time}
+    reported_stats = {
+        'accuracy': best_accuracy.value,
+        'runtime': end_time - start_time,
+        'mem_params': mem_params.value,
+        'mem_bufs': mem_bufs.value,
+        'mem_peak': mem_peak.value }
+
     print(json.dumps(reported_stats))
 
 
-def main_worker(gpu, ngpus_per_node, args, best_accuracy):
+def main_worker(gpu, ngpus_per_node, args, best_accuracy, mem_params, mem_bufs, mem_peak):
     args.gpu = gpu
 
     if args.gpu is not None:
@@ -317,17 +326,13 @@ def main_worker(gpu, ngpus_per_node, args, best_accuracy):
         # is_best = accuracy_num > best_accuracy.value
         best_accuracy.value = max(accuracy_num, best_accuracy.value)
 
-        """
-        if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                and args.rank % ngpus_per_node == 0):
-            save_checkpoint({
-                'epoch': epoch + 1,
-                'arch': args.arch,
-                'state_dict': model.state_dict(),
-                'best_acc1': best_acc1,
-                'optimizer' : optimizer.state_dict(),
-            }, is_best)
-        """
+    mem_params.value = sum([param.nelement()*param.element_size() for param in model.parameters()])
+    mem_bufs.value = sum([buf.nelement()*buf.element_size() for buf in model.buffers()])
+
+    # TODO: Not sure whether this will work when no GPUs are found, checking to be safe
+    if args.parallelism != 'none':
+        mem_peak.value = torch.cuda.max_memory_allocated()
+
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
     batch_time = AverageMeter('Time', ':6.3f')

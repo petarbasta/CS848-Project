@@ -1,6 +1,0 @@
-{
-	"arch": "alexnet",
-	"parallelism": "mp",
-	"data": "/u5/p3basta/datasets/ILSVRC/Data/CLS-LOC",
-	"epochs": 1
-}

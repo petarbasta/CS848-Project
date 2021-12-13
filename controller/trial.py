@@ -1,7 +1,6 @@
 import os
 import paramiko
 import json
-import logging
 
 class TrialConfig:
     def __init__(self, machine, experiment_config) -> None:

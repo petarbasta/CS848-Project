@@ -44,7 +44,7 @@ import torchvision.datasets as datasets
 
 import horovod.torch as hvd
 from ray import tune
-from custom_models import build_horovod_raytune_resnet
+from parallel_models import build_horovod_raytune_resnet
 
 #assert torch.cuda.is_available(), "CUDA must be available in order to run"
 #n_gpus = torch.cuda.device_count()
@@ -69,7 +69,7 @@ supported_models = {
 
 
 
-def init_args(config, data, arch):
+def init_args(config, data, arch, epochs):
     def get_arg(key, default_val):
         return config[key] if key in config else default_val
 
@@ -79,9 +79,9 @@ def init_args(config, data, arch):
     args = type('', (), {})()
     args.data = data
     args.arch = arch
+    args.epochs = epochs
     
     args.workers = get_arg('workers', 4)
-    args.epochs = get_arg('epochs', 90)
     args.batch_size = get_arg('batch-size', 256)
     args.lr = get_arg('lr', 0.1)
     args.momentum = get_arg('momentum', 0.9)
@@ -108,13 +108,14 @@ def init_args(config, data, arch):
     return args
 
 
-def run_training(config, checkpoint_dir=None, data=None, arch=None):
+def run_horovod_raytune_imagenet_training(config, checkpoint_dir=None, data=None, arch=None, epochs=None):
     assert torch.cuda.is_available(), "CUDA must be available in order to run"
     n_gpus = torch.cuda.device_count()
     assert n_gpus == 2, f"ImageNet training requires exactly 2 GPUs to run, but got {n_gpus}"
 
-    assert data is not None, "Dataset path is not specified"
-    assert arch is not None, "Architecture is not specified"
+    assert data is not None, "data is not specified"
+    assert arch is not None, "arch is not specified"
+    assert epochs is not None, "epochs is not specified"
 
     hvd.init()
     #hvd.allreduce()
@@ -122,15 +123,8 @@ def run_training(config, checkpoint_dir=None, data=None, arch=None):
     # Pin GPU to be used to process local rank (one GPU per process)
     torch.cuda.set_device(hvd.local_rank())
 
-    args = init_args(config, data, arch)
+    args = init_args(config, data, arch, epochs)
     main(args)
-
-    """
-    for i in range(config["epochs"]):
-        time.sleep(1)
-        model = Model(learning_rate=config["lr"])
-        tune.report(test=1, rank=hvd.rank())
-    """
 
 
 def main(args):
@@ -153,12 +147,18 @@ def main(args):
         args.world_size = int(os.environ["WORLD_SIZE"])
 
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
+    """
+
     ngpus_per_node = torch.cuda.device_count()
 
     manager = mp.Manager()
     best_accuracy = manager.Value('d', 0)
+    mem_params = manager.Value('d', 0)
+    mem_bufs = manager.Value('d', 0)
+    mem_peak = manager.Value('d', 0)
 
     start_time = timer()
+    """
     if args.multiprocessing_distributed:
         # Since we have ngpus_per_node processes per node, the total world_size
         # needs to be adjusted accordingly
@@ -169,15 +169,30 @@ def main(args):
     else:
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args, best_accuracy)
+    """
+    main_worker(args, best_accuracy, mem_params, mem_bufs, mem_peak)
     end_time = timer()
 
     # After workers have completed, output statistics
-    reported_stats = {'accuracy': best_accuracy.value, 'runtime': end_time - start_time}
-    print(json.dumps(reported_stats))
-    """
-    main_worker(args)
+    reported_stats = {
+        'accuracy': best_accuracy.value,
+        'runtime': end_time - start_time,
+        'mem_params': mem_params.value,
+        'mem_bufs': mem_bufs.value,
+        'mem_peak': mem_peak.value }
 
-def main_worker(args):
+    tune.report(
+        accuracy=reported_stats['accuracy'],
+        runtime=reported_stats['runtime'],
+        mem_peak=reported_stats['mem_peak'],
+        mem_params=reported_stats['mem_params'],
+        mem_bufs=reported_stats['mem_bufs'],
+        rank=hvd.rank())
+
+    print(json.dumps(reported_stats))
+
+
+def main_worker(args, best_accuracy, mem_params, mem_bufs, mem_peak):
     """
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
@@ -344,21 +359,12 @@ def main_worker(args):
         # remember best acc@1 and save checkpoint
         accuracy_num = acc1.item() if torch.is_tensor(acc1) else float(acc1)
         # is_best = accuracy_num > best_accuracy.value
-        #best_accuracy.value = max(accuracy_num, best_accuracy.value)
+        best_accuracy.value = max(accuracy_num, best_accuracy.value)
 
-        tune.report(accuracy=accuracy_num, rank=hvd.rank())
+    mem_params.value = sum([param.nelement()*param.element_size() for param in model.parameters()])
+    mem_bufs.value = sum([buf.nelement()*buf.element_size() for buf in model.buffers()])
+    mem_peak.value = torch.cuda.max_memory_allocated()
 
-        """
-        if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                and args.rank % ngpus_per_node == 0):
-            save_checkpoint({
-                'epoch': epoch + 1,
-                'arch': args.arch,
-                'state_dict': model.state_dict(),
-                'best_acc1': best_acc1,
-                'optimizer' : optimizer.state_dict(),
-            }, is_best)
-        """
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
     batch_time = AverageMeter('Time', ':6.3f')
@@ -540,6 +546,3 @@ def accuracy(output, target, topk=(1,)):
             res.append(correct_k.mul_(100.0 / batch_size))
         return res
 
-
-if __name__ == '__main__':
-    main()

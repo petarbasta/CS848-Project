@@ -7,20 +7,28 @@ from typing import Any, List
 from gpipe_bottleneck import bottleneck
 from gpipe_flatten_sequential import flatten_sequential
 
-# NOTE: We assume host machine has 2 GPUs
-assert torch.cuda.is_available(), "CUDA must be available in order to run"
-n_gpus = torch.cuda.device_count()
-assert n_gpus == 2, f"MP ResNet requires exactly 2 GPUs to run, but got {n_gpus}"
+# # NOTE: We assume host machine has 2 GPUs
+# assert torch.cuda.is_available(), "CUDA must be available in order to run"
+# n_gpus = torch.cuda.device_count()
+# assert n_gpus == 2, f"MP ResNet requires exactly 2 GPUs to run, but got {n_gpus}"
 
 resnet_layers = [3, 4, 6, 3]
 
-class DataParallelResNet50(ResNet):
+
+class BasicResNet50(ResNet):
     def __init__(self, *args, **kwargs):
-        return super(DataParallelResNet50, self).__init__(
+        return super(BasicResNet50, self).__init__(
             Bottleneck, resnet_layers, *args, **kwargs)
 
     def forward(self, x):
-        return super(DataParallelResNet50, self).forward(x)
+        return super(BasicResNet50, self).forward(x)
+
+def build_dp_resnet():
+    return BasicResNet50()
+
+def build_horovod_raytune_resnet():
+    return BasicResNet50()
+
 
 class DataParallelAlexNet(AlexNet):
     def __init__(self, *args, **kwargs):
@@ -28,9 +36,6 @@ class DataParallelAlexNet(AlexNet):
 
     def forward(self, x):
         return super(DataParallelAlexNet, self).forward(x)
-
-def build_dp_resnet():
-    return DataParallelResNet50()
 
 def build_dp_alexnet():
     return DataParallelAlexNet()
