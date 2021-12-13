@@ -133,5 +133,7 @@ fi
 # Deactivate venv
 deactivate
 
-echo "[4/4] Controller is now running in a separate process! Exiting..."
-
+echo "[4/4] Your training job is now running in a separate process!"
+echo Use this command to quickly print your log:
+echo "    cat $log_path"
+echo Exiting...

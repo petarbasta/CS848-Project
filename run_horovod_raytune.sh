@@ -147,4 +147,3 @@ echo Please remember to monitor progress using the log file, and tear down your 
 echo Use this command to quickly print your log:
 echo "    cat $log_path"
 echo Exiting...
-
