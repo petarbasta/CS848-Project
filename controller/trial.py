@@ -25,6 +25,10 @@ class TrialResult:
         return f"{self.hyperparameter_config.get_dict()}: {self.value}, runtime: {self.runtime}, mem_params: {self.mem_params}, mem_bufs: {self.mem_bufs}, mem_peak: {self.mem_peak}"
 
 class Trial:
+    """
+    A Trial executes a hyperparameter optimization trial (train a DNN using a
+    single hyperparameter configuration) on a remote machine, using SSH.
+    """
     def __init__(self, trial_config, hyperparameter_config, logger) -> None:
         self.machine = trial_config.machine
         self.hyperparameter_config = hyperparameter_config

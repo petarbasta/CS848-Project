@@ -4,11 +4,31 @@ import logging
 from multiprocessing import Process, Queue, Lock, Manager
 from trial import Trial, TrialConfig
 
-class ParallelRoundRobinScheduler:
+class Scheduler:
+    """
+    The Scheduler abstract class defines the basic structure of a scheduler, which must
+    schedule and run the trials that constitute hyperparameter optimization.
+    """
     def __init__(self, experiment_config, hyperparameter_space, logger) -> None:
         self.experiment_config = experiment_config
         self.hyperparameter_space = hyperparameter_space
         self.logger = logger
+
+    def run(self):
+        raise NotImplementedError("Scheduler is an abstract class, please subclass")
+
+class ParallelRoundRobinScheduler(Scheduler):
+    """
+    The ParallelRoundRobinScheduler is a Scheduler that starts a consumer for each
+    machine, and a single producer that yields hyperparameter configurations (each will
+    have its own trial). Each consumer takes the next available hyperparameter
+    configuration, executes the corresponding trial, then takes the next available
+    configuration from the producer. All consumers execute in parallel (using
+    multiprocessing), and take configurations in what is essentially a round-robin
+    grid search.
+    """
+    def __init__(self, experiment_config, hyperparameter_space, logger) -> None:
+        super(Scheduler, self).__init__(experiment_config, hyperparameter_space, logger)
 
     def producer(self, queue, lock, results):
         with lock:
