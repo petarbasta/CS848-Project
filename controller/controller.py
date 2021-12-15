@@ -4,7 +4,7 @@ import argparse
 import json
 import sys
 import logging
-from experiment import Experiment, ExperimentConfig
+from experiment import GridSearchExperiment, ExperimentConfig
 from hyperparameters import HyperparameterSpace
 from evaluator import Evaluator
 from getpass import getpass
@@ -70,8 +70,9 @@ def main():
     log_handler.setFormatter(logging.Formatter('[%(asctime)s %(levelname)s] %(message)s'))
     logger.addHandler(log_handler)
 
+    # Run grid search hyperparameter optimization
     experiment_config = ExperimentConfig(args)
-    experiment = Experiment(experiment_config, hyperparameter_space, logger)
+    experiment = GridSearchExperiment(experiment_config, hyperparameter_space, logger)
     
     all_trial_results = experiment.run()
     all_printout = "\n".join(str(r) for r in all_trial_results)
@@ -86,4 +87,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

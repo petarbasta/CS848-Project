@@ -17,7 +17,26 @@ class ExperimentConfig:
             self.train_args['data'] = controller_args.data
 
 class Experiment:
+    """
+    The Experiment abstract class defines the basic structure of a experiment, which runs
+    a specific scheduler to perform hyperparameter optimization.
+    """
     def __init__(self, experiment_config, hyperparameter_space, logger) -> None:
+        self.experiment_config = experiment_config
+        self.hyperparameter_space = hyperparameter_space
+        self.logger = logger
+
+    def run(self):
+        raise NotImplementedError("Experiment is an abstract class, please subclass")
+
+class GridSearchExperiment(Experiment):
+    """
+    The GridSearchExperiment is an Experiment which runs hyperparameter optimization
+    using a basic grid search algorithm, which is executed using a parallel round-robin
+    scheduler.
+    """
+    def __init__(self, experiment_config, hyperparameter_space, logger) -> None:
+        super(Experiment, self).__init__(experiment_config, hyperparameter_space, logger)
         self.scheduler = ParallelRoundRobinScheduler(experiment_config, hyperparameter_space, logger)
 
     def run(self):
