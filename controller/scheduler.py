@@ -28,7 +28,7 @@ class ParallelRoundRobinScheduler(Scheduler):
     grid search.
     """
     def __init__(self, experiment_config, hyperparameter_space, logger) -> None:
-        super(Scheduler, self).__init__(experiment_config, hyperparameter_space, logger)
+        super(ParallelRoundRobinScheduler, self).__init__(experiment_config, hyperparameter_space, logger)
 
     def producer(self, queue, lock, results):
         with lock:

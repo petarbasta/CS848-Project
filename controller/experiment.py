@@ -36,7 +36,7 @@ class GridSearchExperiment(Experiment):
     scheduler.
     """
     def __init__(self, experiment_config, hyperparameter_space, logger) -> None:
-        super(Experiment, self).__init__(experiment_config, hyperparameter_space, logger)
+        super(GridSearchExperiment, self).__init__(experiment_config, hyperparameter_space, logger)
         self.scheduler = ParallelRoundRobinScheduler(experiment_config, hyperparameter_space, logger)
 
     def run(self):
