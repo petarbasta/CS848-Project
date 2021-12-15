@@ -33,41 +33,18 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
-#from torchgpipe import GPipe
-#from torchgpipe.balance import balance_by_time, balance_by_size
-#from torchvision.models.resnet import ResNet
-#from parallel_models import (
-#    build_dp_resnet,
-#    build_mp_resnet,
-#    build_gpipe_resnet        
-#)
-
 import horovod.torch as hvd
 from ray import tune
-from parallel_models import build_horovod_raytune_resnet
+from parallel_models import (
+    build_horovod_raytune_resnet,
+    build_horovod_raytune_alexnet
+)
 
-#assert torch.cuda.is_available(), "CUDA must be available in order to run"
-#n_gpus = torch.cuda.device_count()
-#assert n_gpus == 2, f"ImageNet training requires exactly 2 GPUs to run, but got {n_gpus}"
-
-
-supported_model_architectures = ['resnet']
+supported_model_architectures = ['resnet', 'alexnet']
 supported_models = {
-    'resnet': build_horovod_raytune_resnet
+    'resnet': build_horovod_raytune_resnet,
+    'alexnet': build_horovod_raytune_alexnet
 }
-
-"""
-supported_parallelism_strategies = ['dp', 'mp', 'gpipe']
-supported_models = {
-    'resnet': {
-        'dp': build_dp_resnet,
-        'mp': build_mp_resnet,
-        'gpipe': build_gpipe_resnet,
-    }
-}
-"""
-
-
 
 def init_args(config, data, arch, epochs):
     def get_arg(key, default_val):

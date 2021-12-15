@@ -30,15 +30,18 @@ def build_horovod_raytune_resnet():
     return BasicResNet50()
 
 
-class DataParallelAlexNet(AlexNet):
+class BasicAlexNet(AlexNet):
     def __init__(self, *args, **kwargs):
-        return super(DataParallelAlexNet, self).__init__(*args, **kwargs)
+        return super(BasicAlexNet, self).__init__(*args, **kwargs)
 
     def forward(self, x):
-        return super(DataParallelAlexNet, self).forward(x)
+        return super(BasicAlexNet, self).forward(x)
 
 def build_dp_alexnet():
-    return DataParallelAlexNet()
+    return BasicAlexNet()
+
+def build_horovod_raytune_alexnet():
+    return BasicAlexNet()
 
 
 class ModelParallelResNet50(ResNet):
@@ -197,6 +200,3 @@ def _build_sequential_resnet(layers: List[int],
 
 def build_gpipe_resnet(**kwargs: Any) -> nn.Sequential:
     return _build_sequential_resnet(resnet_layers, **kwargs)
-
-
-

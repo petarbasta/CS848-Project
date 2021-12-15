@@ -34,8 +34,7 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 from torchgpipe import GPipe
-from torchgpipe.balance import balance_by_time, balance_by_size
-from torchvision.models.resnet import ResNet
+from torchgpipe.balance import balance_by_time
 from parallel_models import (
     build_dp_resnet,
     build_mp_resnet,
