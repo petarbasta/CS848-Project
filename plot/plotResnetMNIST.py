@@ -16,7 +16,7 @@ def plot_trial_results(all_trial_results, num_trials, metric_key, units=None):
     y_label = metric_key if units is None else f"{metric_key} ({units})"
     plt.xlabel("Trial")
     plt.ylabel("Peak Memory (Gigabytes)")
-    plt.title(f"Resnet peak memory by trial and parallelization strategy".capitalize())
+    plt.title(f"MNIST on ResNet peak memory by trial and parallelization strategy")
 
     plt.xticks(ind + width / 2, (f"T{i}" for i in range(num_trials)))
     plt.legend(loc='upper left')
@@ -75,6 +75,18 @@ def main():
             {"runtime": 421.29980162577704, "mem_params": 102203040, "mem_bufs": 212904, "mem_peak": 2483406848/1073741824},
             {"runtime": 420.3227094472386, "mem_params": 102203040, "mem_bufs": 212904, "mem_peak": 2531476480/1073741824},
             {"runtime": 427.2676247721538, "mem_params": 102203040, "mem_bufs": 212904, "mem_peak": 2532576768/1073741824},
+        ],
+        'Horovod + Ray Tune': [
+            {"runtime": 447.738 , "mem_peak": 11191332352/1073741824},
+            {"runtime": 447.858 , "mem_peak": 11191332352/1073741824},
+            {"runtime": 448.149 , "mem_peak": 11191332352/1073741824},
+            {"runtime": 430.311 , "mem_peak": 11614491136/1073741824},
+            {"runtime": 429.995 , "mem_peak": 11614491136/1073741824},
+            {"runtime": 430.432 , "mem_peak": 11614491136/1073741824},
+            {"runtime": 428.56 , "mem_peak": 22644975104/1073741824},
+            {"runtime": 428.381 , "mem_peak": 22644975104/1073741824},
+            {"runtime": 428.493 , "mem_peak": 22663849472/1073741824},
+
         ]
 
     }

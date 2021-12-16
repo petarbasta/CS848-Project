@@ -15,8 +15,8 @@ def plot_trial_results(all_trial_results, num_trials, metric_key, units=None):
 
     y_label = metric_key if units is None else f"{metric_key} ({units})"
     plt.xlabel("Trial")
-    plt.ylabel("Runtime (s)")
-    plt.title(f"MNIST Alexnet runtime by trial and parallelization strategy".capitalize())
+    plt.ylabel("Peak Memory (Gigabytes)")
+    plt.title(f"MNIST on AlexNet peak memory by trial and parallelization strategy")
 
     plt.xticks(ind + width / 2, (f"T{i}" for i in range(num_trials)))
     plt.legend(loc='lower right')
@@ -90,7 +90,7 @@ def main():
         #    ]
 
     }
-    plot_trial_results(all_trial_results, num_trials, 'runtime', 's')
+    plot_trial_results(all_trial_results, num_trials, 'mem_peak', 's')
 
     # Not particularly meaningful
     #plot_trial_results(all_trial_results, num_trials, 'accuracy', '%')
